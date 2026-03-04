@@ -57,7 +57,6 @@ python manage.py runserver
 
 【注意】
 - 本リポジトリは卒業研究の成果物として公開している。実運用を行う場合は、SECRET_KEY などの設定を環境変数で管理すること。
-- OpenStreetMap を表示する場合は、クレジット表記（© OpenStreetMap contributors）を維持すること。
 
 【ライセンス・クレジット】
 - Map data © OpenStreetMap contributors
