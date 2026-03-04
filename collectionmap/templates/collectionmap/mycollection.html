@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+
+{% block title %}My Collection{% endblock %}
+
+{% block extra_head %}
+{{ block.super }}
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+<!-- 分割されたスタイルシートの読み込み -->
+{% include "collectionmap/includes/styles.html" %}
+
+{% endblock %}
+
+{% block content %}
+<div class="mode-container">
+    <div class="mode-content">
+        <div class="mode-header">
+            <h2>🏆あなたのコレクション</h2>
+        </div>
+
+        <div class="mode-select-area">
+            <select onchange="location.href='?mode=' + this.value">
+                <option value="explore" {% if current_mode == 'explore' %}selected{% endif %}>探索マップ</option>
+                <option value="puzzle" {% if current_mode == 'puzzle' %}selected{% endif %}>コレクションパズル</option>
+                <option value="trophy" {% if current_mode == 'trophy' %}selected{% endif %}>トロフィー</option>
+            </select>
+        </div>
+
+        <!-- 説明文エリア -->
+        <div class="collection-description">
+            {% if current_mode == 'explore' %}
+                今まであなたが投稿してきたマップです。（発見は赤、未発見は青、危険地帯は黄色）
+            {% elif current_mode == 'puzzle' %}
+                あなたのコレクションに基づいてパズルが完成します。発見したマスはパズルの一部として表示されます。
+            {% elif current_mode == 'trophy' %}
+                あなたが獲得したトロフィーの一覧です。トロフィーをクリックすると詳細が表示されます。
+            {% endif %}
+        </div>
+
+        <!-- モードに応じてテンプレートを切り替え -->
+        {% if current_mode == 'trophy' %}
+             {% include "collectionmap/includes/trophy_board.html" %}
+        {% else %}
+             <!-- 探索(explore) または パズル(puzzle) の場合 -->
+             {% include "collectionmap/includes/map_board.html" %}
+        {% endif %}
+    </div>
+    <div style="text-align: center; margin-top: 40px; margin-bottom: 40px;">
+    <a href="{% url 'dashboard' %}" class="btn btn-primary">
+        ダッシュボード画面に戻る
+    </a>
+    </div>
+</div>
+{% endblock %}

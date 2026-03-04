@@ -1,0 +1,466 @@
+<style>
+    /* 共通スタイル */
+    .mode-container {
+        max-width: 100%; /* 幅制限を解除 */
+        margin: 0 auto;
+        padding: 0; /* paddingを削除 */
+    }
+
+    .mode-header {
+        text-align: center;
+        margin-bottom: 30px;
+    }
+
+    .mode-header h1 {
+        color: #333;
+        font-size: 2.5em;
+        margin-bottom: 20px;
+    }
+
+    /* セレクトボックスエリア */
+    .mode-select-area {
+        margin-bottom: 25px;
+        text-align: center;
+    }
+
+    .mode-select-area select {
+        width: 100%;
+        padding: 10px;
+        font-size: 16px;
+        border-radius: 6px;
+        border: 2px solid #4caf50; /* 枠線を緑に */
+        background-color: #f9fff9; /* 薄い緑の背景 */
+        color: #333; /* 文字色は読みやすく */
+        font-weight: bold;
+        cursor: pointer;
+        appearance: none; /* デフォルトの矢印を消す（モダンブラウザ用） */
+        /* カスタム矢印を追加 */
+        background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%234caf50' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e");
+        background-repeat: no-repeat;
+        background-position: right 1rem center;
+        background-size: 1em;
+    }
+
+    .mode-select-area select:focus {
+        outline: none;
+        box-shadow: 0 0 0 3px rgba(76, 175, 80, 0.3);
+    }
+
+    /* 説明文のスタイル */
+    .collection-description {
+        margin: 10px 0 20px;
+        padding: 10px 14px;
+        background: #f4f7f4;
+        border-left: 4px solid #4caf50;
+        border-radius: 6px;
+        color: #333;
+        font-size: 14px;
+        line-height: 1.5;
+    }
+
+    .mode-content {
+        background: transparent; /* 背景を透明に */
+        border-radius: 12px;
+        padding: 10px; /* パディングを縮小 */
+        box-shadow: none; /* 影を消す */
+    }
+
+    /* 探索モードとパズルモードのスタイル */
+    #map {
+        width: 100%;
+        height: 350px;
+        border-radius: 10px;
+    }
+
+    #puzzle-container {
+        display: none;
+        position: relative;
+        width: 100%;
+        height: 350px;
+        border-radius: 10px;
+        overflow: hidden;
+        background: #000;
+    }
+
+    #puzzle-image {
+        display: none !important;
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+    }
+
+    /* パズルピース */
+    .puzzle-piece {
+        position: absolute;
+        box-sizing: border-box;
+        border: 1px solid rgba(0,0,0,0.1);
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        font-weight: bold;
+        color: white;
+        text-shadow: 0 0 4px rgba(0,0,0,0.8);
+        font-size: 1.2em;
+        transition: opacity 0.3s;
+    }
+
+    /* 進行中状態の数字用バッジ */
+    .puzzle-badge {
+        background: rgba(0, 0, 0, 0.5);
+        padding: 4px 8px;
+        border-radius: 12px;
+        pointer-events: none; /* クリックを通す */
+    }
+
+    /* ローディング表示 */
+    .puzzle-loading {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        color: #fff;
+        font-weight: bold;
+    }
+
+     /* パズル用ポップアップ */
+    .puzzle-popup {
+        position: absolute;
+        background: white;
+        padding: 15px;
+        border-radius: 8px;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+        z-index: 100;
+        font-size: 14px;
+        min-width: 180px;
+        transform: translateX(-50%); /* 左右中央揃え */
+    }
+
+    /* 上に表示する場合（デフォルト・下半分の要素用） */
+    .puzzle-popup.position-top {
+        transform: translate(-50%, -100%);
+        margin-top: -10px;
+    }
+    .puzzle-popup.position-top::after {
+        content: '';
+        position: absolute;
+        bottom: -8px;
+        left: 50%;
+        transform: translateX(-50%);
+        border-width: 8px 8px 0;
+        border-style: solid;
+        border-color: white transparent transparent transparent;
+    }
+
+    /* 下に表示する場合（上半分の要素用） */
+    .puzzle-popup.position-bottom {
+        margin-top: 10px;
+    }
+    .puzzle-popup.position-bottom::after {
+        content: '';
+        position: absolute;
+        top: -8px;
+        left: 50%;
+        transform: translateX(-50%);
+        border-width: 0 8px 8px; 
+        border-style: solid;
+        border-color: transparent transparent white transparent;
+    }
+
+    .puzzle-popup a,
+    .map-popup-style a {
+        display: block;
+        margin: 8px 0;
+        color: #4CAF50;
+        text-decoration: none;
+        font-weight: bold;
+    }
+    .puzzle-popup a:hover,
+    .map-popup-style a:hover {
+        text-decoration: underline;
+    }
+    .puzzle-popup .close {
+        position: absolute;
+        top: 2px;
+        right: 8px;
+        cursor: pointer;
+        font-size: 20px;
+        color: #999;
+        line-height: 1;
+    }
+    .puzzle-popup .close:hover {
+        color: #333;
+    }
+
+    /* 達成率ゲージ */
+    .progress-bar {
+        width: 100%;
+        height: 18px;
+        background: #ddd;
+        border-radius: 10px;
+        overflow: hidden;
+        margin-bottom: 10px;
+    }
+
+    .progress-fill {
+        height: 100%;
+        background: #4caf50;
+        width: 0%;
+        transition: width 0.6s ease;
+    }
+
+    /* トロフィーモードのスタイル */
+    .trophy-container {
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 20px;
+    }
+
+    .trophy-header {
+        text-align: center;
+        margin-bottom: 30px;
+    }
+
+    .trophy-header h1 {
+        color: #333;
+        font-size: 2.5em;
+        margin-bottom: 10px;
+    }
+
+    .trophy-stats {
+        display: flex;
+        justify-content: center;
+        gap: 30px;
+        margin-bottom: 20px;
+    }
+
+    .stat-item {
+        text-align: center;
+    }
+
+    .stat-number {
+        font-size: 2em;
+        font-weight: bold;
+        color: #4CAF50;
+    }
+
+    .stat-label {
+        color: #666;
+        font-size: 0.9em;
+    }
+
+    .trophy-grid {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr); /* 強制的に2列 */
+        gap: 10px; /* 隙間を縮める */
+        margin-bottom: 30px;
+    }
+    @media (min-width: 600px) {
+        .trophy-grid {
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); /* PC等は従来通り */
+            gap: 20px;
+        }
+    }
+
+    .trophy-card {
+        background: white;
+        border-radius: 12px;
+        padding: 10px; /* スマホ用にpaddingを減らす */
+        text-align: center;
+        box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+        cursor: pointer;
+        transition: all 0.3s ease;
+        border: 2px solid transparent;
+        /* height: 100%; グリッドアイテムの高さを揃える場合は指定 */
+    }
+
+    .trophy-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 8px 16px rgba(0,0,0,0.2);
+    }
+
+    .trophy-card.obtained:hover {
+        border-color: #4CAF50;
+    }
+
+    .trophy-card.locked:hover {
+        border-color: #ccc;
+    }
+
+    .trophy-image {
+        width: 50px; /* スマホ用に少し小さく */
+        height: 50px;
+        border-radius: 10px;
+        margin: 0 auto 10px;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.5em; /* アイコンサイズも調整 */
+        color: white;
+        position: relative;
+    }
+    @media (min-width: 600px) {
+        .trophy-image {
+            width: 80px;
+            height: 80px;
+            font-size: 2em;
+            margin: 0 auto 15px;
+        }
+    }
+
+    .trophy-image.locked {
+        filter: grayscale(100%);
+        opacity: 0.6;
+        background: linear-gradient(135deg, #ccc 0%, #999 100%);
+    }
+
+    .trophy-image::before {
+        content: "🏆";
+    }
+
+    .trophy-name {
+        font-weight: bold;
+        margin-bottom: 5px;
+        font-size: 0.9em; /* スマホ用に小さく */
+        min-height: 2.7em; /* 2行分確保してレイアウト崩れ防止 */
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+    }
+    @media (min-width: 600px) {
+        .trophy-name {
+            font-size: 1.1em;
+            margin-bottom: 8px;
+        }
+    }
+
+    .trophy-rarity {
+        display: inline-block;
+        padding: 4px 8px;
+        border-radius: 12px;
+        font-size: 0.8em;
+        font-weight: bold;
+        text-transform: uppercase;
+    }
+
+    .rarity-bronze { background: #CD7F32; color: white; }
+    .rarity-silver { background: #C0C0C0; color: black; }
+    .rarity-gold { background: #FFD700; color: black; }
+    .rarity-legend { background: linear-gradient(45deg, #FF6B6B, #4ECDC4); color: white; }
+
+    /* モーダル */
+    .modal-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0,0,0,0.7);
+        display: none;
+        justify-content: center;
+        align-items: center;
+        z-index: 1000;
+        animation: fadeIn 0.3s ease;
+    }
+
+    .modal {
+        background: white;
+        width: 90%;
+        max-width: 500px;
+        padding: 30px;
+        border-radius: 16px;
+        text-align: center;
+        box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+        animation: slideIn 0.3s ease;
+        position: relative;
+    }
+
+    @keyframes fadeIn {
+        from { opacity: 0; }
+        to { opacity: 1; }
+    }
+
+    @keyframes slideIn {
+        from { opacity: 0; transform: scale(0.9) translateY(20px); }
+        to { opacity: 1; transform: scale(1) translateY(0); }
+    }
+
+    .modal-image {
+        width: 120px;
+        height: 120px;
+        border-radius: 16px;
+        margin: 0 auto 20px;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 3em;
+        color: white;
+    }
+
+    .modal-image::before {
+        content: "🏆";
+    }
+
+    .modal h2 {
+        margin-bottom: 15px;
+        color: #333;
+    }
+
+    .modal p {
+        margin-bottom: 10px;
+        line-height: 1.6;
+    }
+
+    .modal-rarity {
+        display: inline-block;
+        padding: 6px 12px;
+        border-radius: 20px;
+        font-weight: bold;
+        text-transform: uppercase;
+        font-size: 0.9em;
+    }
+
+    .close-btn {
+        margin-top: 20px;
+        padding: 10px 25px;
+        background: #4CAF50;
+        color: white;
+        border: none;
+        border-radius: 25px;
+        cursor: pointer;
+        font-weight: bold;
+        transition: background 0.3s ease;
+    }
+
+    .close-btn:hover {
+        background: #45a049;
+    }
+
+    /* レスポンシブデザイン */
+    @media (max-width: 768px) {
+        .trophy-grid {
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 15px;
+        }
+
+        .trophy-header h1 {
+            font-size: 2em;
+        }
+
+        .trophy-stats {
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        .mode-tabs {
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .mode-btn {
+            width: 200px;
+        }
+    }
+</style>

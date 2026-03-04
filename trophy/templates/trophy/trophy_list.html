@@ -1,0 +1,380 @@
+
+{% extends "base.html" %}
+
+{% block title %}My Collection{% endblock %}
+
+{% block extra_head %}
+{{ block.super }}
+
+{% endblock %}
+
+{% block content %}
+
+<h2 class="section-title">My Trophy</h2>
+
+<div class="card">
+
+    <div class="btn-area" style="margin-bottom: 20px;">
+        <a href="/collectionmap/mycollection/?mode=trophy" class="btn">統合ビューで開く</a>
+    </div>
+</div>
+
+{% endblock %}
+{% comment %} {% extends "base.html" %}
+
+{% block title %}トロフィー一覧{% endblock %}
+
+{% block extra_head %}
+{{ block.super }}
+
+<style>
+    /* トロフィー一覧のスタイル */
+    .trophy-container {
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 20px;
+    }
+
+    .trophy-header {
+        text-align: center;
+        margin-bottom: 30px;
+    }
+
+    .trophy-header h1 {
+        color: #333;
+        font-size: 2.5em;
+        margin-bottom: 10px;
+    }
+
+    .trophy-stats {
+        display: flex;
+        justify-content: center;
+        gap: 30px;
+        margin-bottom: 20px;
+    }
+
+    .stat-item {
+        text-align: center;
+    }
+
+    .stat-number {
+        font-size: 2em;
+        font-weight: bold;
+        color: #4CAF50;
+    }
+
+    .stat-label {
+        color: #666;
+        font-size: 0.9em;
+    }
+
+    /* トロフィーグリッド */
+    .trophy-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 20px;
+        margin-bottom: 30px;
+    }
+
+    .trophy-card {
+        background: white;
+        border-radius: 12px;
+        padding: 20px;
+        text-align: center;
+        box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+        cursor: pointer;
+        transition: all 0.3s ease;
+        border: 2px solid transparent;
+    }
+
+    .trophy-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 8px 16px rgba(0,0,0,0.2);
+    }
+
+    .trophy-card.obtained:hover {
+        border-color: #4CAF50;
+    }
+
+    .trophy-card.locked:hover {
+        border-color: #ccc;
+    }
+
+    .trophy-image {
+        width: 80px;
+        height: 80px;
+        border-radius: 12px;
+        margin: 0 auto 15px;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 2em;
+        color: white;
+        position: relative;
+    }
+
+    .trophy-image.locked {
+        filter: grayscale(100%);
+        opacity: 0.6;
+        background: linear-gradient(135deg, #ccc 0%, #999 100%);
+    }
+
+    .trophy-image::before {
+        content: "🏆";
+    }
+
+    .trophy-name {
+        font-weight: bold;
+        margin-bottom: 8px;
+        font-size: 1.1em;
+    }
+
+    .trophy-rarity {
+        display: inline-block;
+        padding: 4px 8px;
+        border-radius: 12px;
+        font-size: 0.8em;
+        font-weight: bold;
+        text-transform: uppercase;
+    }
+
+    .rarity-bronze { background: #CD7F32; color: white; }
+    .rarity-silver { background: #C0C0C0; color: black; }
+    .rarity-gold { background: #FFD700; color: black; }
+    .rarity-legend { background: linear-gradient(45deg, #FF6B6B, #4ECDC4); color: white; }
+
+    /* モーダル */
+    .modal-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0,0,0,0.7);
+        display: none;
+        justify-content: center;
+        align-items: center;
+        z-index: 1000;
+        animation: fadeIn 0.3s ease;
+    }
+
+    .modal {
+        background: white;
+        width: 90%;
+        max-width: 500px;
+        padding: 30px;
+        border-radius: 16px;
+        text-align: center;
+        box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+        animation: slideIn 0.3s ease;
+        position: relative;
+    }
+
+    @keyframes fadeIn {
+        from { opacity: 0; }
+        to { opacity: 1; }
+    }
+
+    @keyframes slideIn {
+        from { opacity: 0; transform: scale(0.9) translateY(20px); }
+        to { opacity: 1; transform: scale(1) translateY(0); }
+    }
+
+    .modal-image {
+        width: 120px;
+        height: 120px;
+        border-radius: 16px;
+        margin: 0 auto 20px;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 3em;
+        color: white;
+    }
+
+    .modal-image::before {
+        content: "🏆";
+    }
+
+    .modal h2 {
+        margin-bottom: 15px;
+        color: #333;
+    }
+
+    .modal p {
+        margin-bottom: 10px;
+        line-height: 1.6;
+    }
+
+    .modal-rarity {
+        display: inline-block;
+        padding: 6px 12px;
+        border-radius: 20px;
+        font-weight: bold;
+        text-transform: uppercase;
+        font-size: 0.9em;
+    }
+
+    .close-btn {
+        margin-top: 20px;
+        padding: 10px 25px;
+        background: #4CAF50;
+        color: white;
+        border: none;
+        border-radius: 25px;
+        cursor: pointer;
+        font-weight: bold;
+        transition: background 0.3s ease;
+    }
+
+    .close-btn:hover {
+        background: #45a049;
+    }
+
+    /* レスポンシブデザイン */
+    @media (max-width: 768px) {
+        .trophy-grid {
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 15px;
+        }
+
+        .trophy-header h1 {
+            font-size: 2em;
+        }
+
+        .trophy-stats {
+            flex-direction: column;
+            gap: 15px;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+
+<div class="trophy-container">
+    <div class="trophy-header">
+        <h1>🏆 トロフィーコレクション</h1>
+
+        <div class="trophy-stats">
+            <div class="stat-item">
+                <div class="stat-number">{{ total_trophies }}</div>
+                <div class="stat-label">総トロフィー数</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-number">{{ obtained_count }}</div>
+                <div class="stat-label">取得済み</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-number">{{ remaining_count }}</div>
+                <div class="stat-label">未取得</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="trophy-grid">
+    {% for trophy in trophies %}
+        <div class="trophy-card {% if trophy.id in obtained_trophy_ids %}obtained{% else %}locked{% endif %}"
+             onclick="openTrophyModal({{ trophy.id }}, '{{ trophy.name }}', '{{ trophy.description }}', '{{ trophy.rarity }}', '{{ trophy.get_rarity_display }}', {% if trophy.id in obtained_trophy_ids %}true{% else %}false{% endif %})">
+
+            <div class="trophy-image {% if not trophy.id in obtained_trophy_ids %}locked{% endif %}"></div>
+
+            <div class="trophy-name">
+                {% if trophy.id in obtained_trophy_ids %}
+                    {{ trophy.name }}
+                {% else %}
+                    ？？？
+                {% endif %}
+            </div>
+
+            {% if trophy.id in obtained_trophy_ids %}
+            <div class="trophy-rarity rarity-{{ trophy.rarity }}">
+                {{ trophy.get_rarity_display }}
+            </div>
+            {% endif %}
+        </div>
+    {% endfor %}
+    </div>
+</div>
+
+<!-- トロフィーモーダル -->
+<div class="modal-overlay" id="trophyModal">
+    <div class="modal">
+        <div class="modal-image" id="modalTrophyImage"></div>
+        <h2 id="modalTrophyName"></h2>
+        <p id="modalTrophyDesc"></p>
+        <p class="modal-rarity" id="modalTrophyRarity"></p>
+        <button class="close-btn" onclick="closeTrophyModal()">閉じる</button>
+    </div>
+</div>
+
+<script>
+// トロフィーモーダルの管理
+const trophyModal = {
+    modal: null,
+    name: null,
+    desc: null,
+    rarity: null,
+    image: null,
+
+    init() {
+        this.modal = document.getElementById('trophyModal');
+        this.name = document.getElementById('modalTrophyName');
+        this.desc = document.getElementById('modalTrophyDesc');
+        this.rarity = document.getElementById('modalTrophyRarity');
+        this.image = document.getElementById('modalTrophyImage');
+    },
+
+    open(id, name, desc, rarity, rarityDisplay, isUnlocked) {
+        if (isUnlocked) {
+            this.name.textContent = name;
+            this.desc.textContent = desc;
+            this.rarity.textContent = `レア度: ${rarityDisplay}`;
+            this.rarity.className = `modal-rarity rarity-${rarity}`;
+        } else {
+            this.name.textContent = "？？？";
+            this.desc.textContent = "このトロフィーはまだ取得していません。条件を満たしてチャレンジしましょう！";
+            this.rarity.textContent = "";
+            this.rarity.className = "modal-rarity";
+        }
+
+        this.modal.style.display = "flex";
+    },
+
+    close() {
+        this.modal.style.display = "none";
+    }
+};
+
+// 初期化
+document.addEventListener('DOMContentLoaded', function() {
+    trophyModal.init();
+});
+
+// グローバル関数
+function openTrophyModal(id, name, desc, rarity, rarityDisplay, isUnlocked) {
+    trophyModal.open(id, name, desc, rarity, rarityDisplay, isUnlocked);
+}
+
+function closeTrophyModal() {
+    trophyModal.close();
+}
+
+// ESCキーでモーダルを閉じる
+document.addEventListener('keydown', function(event) {
+    if (event.key === 'Escape' && trophyModal.modal.style.display === 'flex') {
+        trophyModal.close();
+    }
+});
+
+// モーダル外クリックで閉じる
+trophyModal.modal.addEventListener('click', function(event) {
+    if (event.target === trophyModal.modal) {
+        trophyModal.close();
+    }
+});
+</script>
+
+{% endblock %} {% endcomment %}

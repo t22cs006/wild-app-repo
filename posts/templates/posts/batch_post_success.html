@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+
+{% block title %}投稿完了{% endblock %}
+
+{% block content %}
+
+<div class="card" style="text-align:center; padding:40px;">
+    <h2 style="color:#4caf50; margin-bottom:20px;">
+        バッチ投稿が完了しました！
+    </h2>
+
+    <p style="margin-bottom:30px;">
+        選択したグリッドへの投稿が正常に作成されました。
+    </p>
+
+    <a href="{% url 'dashboard' %}" class="btn" style="width: 60%;">
+        ダッシュボードに戻る
+    </a>
+</div>
+
+{% endblock %}

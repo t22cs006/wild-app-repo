@@ -1,0 +1,186 @@
+{% extends "base.html" %}
+
+{% block title %}管理者バッチ投稿{% endblock %}
+
+{% block extra_head %}
+{{ block.super }}
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+<style>
+    #map {
+        width: 100%;
+        aspect-ratio: 1 / 1;
+        border-radius: 10px;
+    }
+
+    .selected-grid {
+        stroke: red !important;
+        stroke-width: 4 !important;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+
+<h2 class="section-title">管理者バッチ投稿</h2>
+
+<div class="card">
+
+<form id="batchForm" method="post" enctype="multipart/form-data">
+    {% csrf_token %}
+
+    <div class="form-block">
+        <h3>ユーザ選択</h3>
+        <select name="user" required>
+            {% for u in users %}
+            <option value="{{ u.id }}">{{ u.username }}</option>
+            {% endfor %}
+        </select>
+    </div>
+
+    <div class="form-block">
+        <h3>presence</h3>
+        <label><input type="radio" name="presence" value="present" required> present</label>
+        <label><input type="radio" name="presence" value="absent"> absent</label>
+    </div>
+
+    <div class="form-block">
+        <h3>画像（present の場合必須）</h3>
+        <input type="file" name="image">
+    </div>
+
+    <div class="form-block">
+        <h3>日時</h3>
+        <input type="datetime-local" name="timestamp" required>
+    </div>
+
+    <div class="form-block">
+        <h3>グリッドを複数選択</h3>
+        <p id="gridCount">選択中：0 グリッド</p>
+        <div id="map" style="height: 350px;"></div>
+    </div>
+
+    <input type="hidden" name="grids" id="grids">
+
+    <button type="submit" class="btn" style="width:100%; margin-top:20px;">
+        投稿する
+    </button>
+</form>
+
+</div>
+
+<script>
+    // 定数定義
+    const CONFIG = {
+        centerLat: {{ CENTER_LAT }},
+        centerLon: {{ CENTER_LON }},
+        GRID_SIZE: {{ GRID_SIZE }},
+        MIN_LAT: {{ MIN_LAT }},
+        MAX_LAT: {{ MAX_LAT }},
+        MIN_LON: {{ MIN_LON }},
+        MAX_LON: {{ MAX_LON }},
+    };
+
+    CONFIG.GRID_COLS = Math.floor((CONFIG.MAX_LON - CONFIG.MIN_LON) / CONFIG.GRID_SIZE);
+    CONFIG.GRID_ROWS = Math.floor((CONFIG.MAX_LAT - CONFIG.MIN_LAT) / CONFIG.GRID_SIZE);
+
+
+    const map = L.map('map').setView([CONFIG.centerLat, CONFIG.centerLon], 14);
+
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        maxZoom: 18,
+    }).addTo(map);
+
+    // ズーム/グリッド情報表示コントロール
+    const infoControl = L.control({position: 'bottomleft'});
+    infoControl.onAdd = function (map) {
+        this._div = L.DomUtil.create('div', 'info-control');
+        this._div.style.padding = '6px 8px';
+        this._div.style.background = 'white';
+        this._div.style.boxShadow = '0 0 15px rgba(0,0,0,0.2)';
+        this._div.style.borderRadius = '5px';
+        this._div.style.fontSize = '14px';
+        this.update();
+        return this._div;
+    };
+    infoControl.update = function () {
+        const zoom = map.getZoom();
+        this._div.innerHTML = `<b>Zoom Level: ${zoom}</b><br>Grid Size: 250m`;
+    };
+    infoControl.addTo(map);
+
+    map.on('zoomend', function() {
+        infoControl.update();
+    });
+
+    let gridLayer = L.layerGroup().addTo(map);
+    let selected = [];
+
+    function updateCount() {
+        document.getElementById("gridCount").innerText =
+            `選択中：${selected.length} グリッド`;
+    }
+
+    function drawBatchGrid() {
+        const { MIN_LAT, MIN_LON, GRID_SIZE } = CONFIG;
+
+        for (let gy = 0; gy < CONFIG.GRID_ROWS; gy++) {
+            for (let gx = 0; gx < CONFIG.GRID_COLS; gx++) {
+
+                const lat = MIN_LAT + gy * GRID_SIZE;
+                const lon = MIN_LON + gx * GRID_SIZE;
+
+                const bounds = [
+                    [lat, lon],
+                    [lat + GRID_SIZE, lon + GRID_SIZE]
+                ];
+
+                const rect = L.rectangle(bounds, {
+                    color: "#cccccc",
+                    weight: 1,
+                    fillColor: "#e0e0e0",
+                    fillOpacity: 0.1
+                }).addTo(gridLayer);
+
+                const key = `${gx},${gy}`;
+
+                rect.on("click", () => {
+                    if (rect.selected) {
+                        rect.setStyle({ weight: 1, color: "#cccccc" });
+                        rect.selected = false;
+                        selected = selected.filter(s => s.key !== key);
+                    } else {
+                        rect.setStyle({ weight: 4, color: "red" });
+                        rect.selected = true;
+                        selected.push({ key, gx, gy, lat, lon });
+                    }
+
+                    updateCount();
+                });
+            }
+        }
+    }
+    
+
+
+    // 確認ダイアログ
+    document.getElementById("batchForm").addEventListener("submit", function(e) {
+        if (selected.length === 0) {
+            alert("グリッドを1つ以上選択してください。");
+            e.preventDefault();
+            return;
+        }
+
+        if (!confirm(`${selected.length} 件の投稿を作成します。よろしいですか？`)) {
+            e.preventDefault();
+            return;
+        }
+
+        document.getElementById("grids").value = JSON.stringify(selected);
+    });
+
+    drawBatchGrid();
+</script>
+
+{% endblock %}

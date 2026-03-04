@@ -1,0 +1,256 @@
+<!-- トロフィーモード -->
+
+<style>
+    .trophy-summary {
+        text-align: center;
+        margin-bottom: 20px;
+        padding: 15px;
+        background: #fff; /* 背景白の方が清潔感があるかも */
+        border-radius: 8px;
+        /* border: 1px solid #eee; シンプルに */
+    }
+    .trophy-summary .label {
+        font-size: 14px;
+        color: #666;
+        margin-bottom: 5px;
+        font-weight: bold;
+    }
+    .trophy-summary .count {
+        font-size: 36px;
+        font-weight: bold;
+        color: #4caf50;
+        line-height: 1;
+        font-family: 'Segoe UI', sans-serif;
+    }
+    .trophy-summary .total {
+        font-size: 20px;
+        color: #aaa;
+        font-weight: normal;
+        margin-left: 2px;
+    }
+    
+    .trophy-category-title {
+        text-align: left;
+        margin: 25px 0 10px;
+        font-size: 1.1rem;
+        color: #444;
+        border-left: 4px solid #4caf50;
+        padding-left: 10px;
+        font-weight: bold;
+    }
+</style>
+
+<div class="trophy-summary">
+    <div class="label">獲得トロフィー数</div>
+    <div class="count">
+        {{ obtained_count }} <span class="total">/ {{ total_trophies }}</span>
+    </div>
+</div>
+
+
+<div style="text-align: center; margin-bottom: 30px;">
+    <button onclick="openProfileModal()" style="
+        background-color: #008CBA;
+        color: white;
+        border: none;
+        padding: 10px 20px;
+        border-radius: 5px; /* 丸みをつける */
+        font-weight: bold;
+        cursor: pointer;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        font-size: 14px;
+        transition: transform 0.2s, background-color 0.2s;">
+        ✅ 現在の進行状況 / プロフィールを確認
+    </button>
+</div>
+
+{% if grouped_trophies %}
+    {% for category_name, trophy_list in grouped_trophies %}
+        <h3 class="trophy-category-title">{{ category_name }}</h3>
+        <div class="trophy-grid">
+            {% for trophy in trophy_list %}
+                <div class="trophy-card {% if trophy.id in obtained_trophy_ids %}obtained{% else %}locked{% endif %}"
+                        onclick="openTrophyModal({{ trophy.id }}, '{{ trophy.name }}', '{{ trophy.description }}', '{{ trophy.rarity }}', '{{ trophy.get_rarity_display }}', {% if trophy.id in obtained_trophy_ids %}true{% else %}false{% endif %})">
+            
+                    <div class="trophy-image {% if not trophy.id in obtained_trophy_ids %}locked{% endif %}"></div>
+            
+                    <div class="trophy-name">
+                        {% if trophy.id in obtained_trophy_ids %}
+                            {{ trophy.name }}
+                        {% else %}
+                            ？？？
+                        {% endif %}
+                    </div>
+            
+                    {% if trophy.id in obtained_trophy_ids %}
+                    <div class="trophy-rarity rarity-{{ trophy.rarity }}">
+                        {{ trophy.get_rarity_display }}
+                    </div>
+                    {% endif %}
+                </div>
+            {% endfor %}
+        </div>
+    {% endfor %}
+{% else %}
+    <div class="trophy-grid">
+    {% for trophy in trophies %}
+        <div class="trophy-card {% if trophy.id in obtained_trophy_ids %}obtained{% else %}locked{% endif %}"
+                onclick="openTrophyModal({{ trophy.id }}, '{{ trophy.name }}', '{{ trophy.description }}', '{{ trophy.rarity }}', '{{ trophy.get_rarity_display }}', {% if trophy.id in obtained_trophy_ids %}true{% else %}false{% endif %})">
+
+            <div class="trophy-image {% if not trophy.id in obtained_trophy_ids %}locked{% endif %}"></div>
+
+            <div class="trophy-name">
+                {% if trophy.id in obtained_trophy_ids %}
+                    {{ trophy.name }}
+                {% else %}
+                    ？？？
+                {% endif %}
+            </div>
+
+            {% if trophy.id in obtained_trophy_ids %}
+            <div class="trophy-rarity rarity-{{ trophy.rarity }}">
+                {{ trophy.get_rarity_display }}
+            </div>
+            {% endif %}
+        </div>
+    {% endfor %}
+    </div>
+{% endif %}
+
+<!-- プロフィールモーダル -->
+<div class="modal-overlay" id="profileModal">
+    <div class="modal" style="max-width: 380px; width: 90%; text-align: left; max-height: 80vh; overflow-y: auto; padding: 20px;">
+        <h2 style="text-align: center; border-bottom: 2px solid #eee; padding-bottom: 10px; font-size: 1.2rem; margin-top: 0;">👤 ユーザープロフィール</h2>
+        
+        <div style="display: grid; grid-template-columns: 1fr; gap: 8px; margin-bottom: 20px; font-size: 0.95rem;">
+            <div style="display: flex; justify-content: space-between;"><strong>ログイン日数:</strong> <span>{{ user_profile.login_days }}日</span></div>
+            <div style="display: flex; justify-content: space-between;"><strong>連続投稿:</strong> <span>{{ user_profile.consecutive_post_days }}日</span></div>
+            <div style="display: flex; justify-content: space-between;"><strong>発見報告:</strong> <span>{{ user_profile.present_count }}回</span></div>
+            <div style="display: flex; justify-content: space-between;"><strong>不在報告:</strong> <span>{{ user_profile.absent_count }}回</span></div>
+            <div style="display: flex; justify-content: space-between;"><strong>未開拓地(Pioneer):</strong> <span>{{ user_profile.pioneer_count }}回</span></div>
+            <div style="display: flex; justify-content: space-between;"><strong>情報の更新(Revival):</strong> <span>{{ user_profile.revival_count }}回</span></div>
+            <div style="display: flex; justify-content: space-between;"><strong>投稿ランク:</strong> <span>{{ rank_post_count }}位</span></div>
+            <div style="display: flex; justify-content: space-between;"><strong>トロフィーランク:</strong> <span>{{ rank_trophies }}位</span></div>
+        </div>
+
+        <h3 style="border-bottom: 1px solid #eee; padding-bottom: 5px; font-size: 1.1rem;">🐾 動物別発見数</h3>
+        <div style="display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px;">
+            {% for species, count in species_counts.items %}
+                <span style="background: #f0f0f0; padding: 4px 8px; border-radius: 12px; font-size: 0.85em;">
+                    {{ species }}: <strong>{{ count }}</strong>
+                </span>
+            {% empty %}
+                <p>まだ発見報告がありません。</p>
+            {% endfor %}
+        </div>
+
+        <div style="text-align: center; margin-top: 20px;">
+            <button class="close-btn" onclick="closeProfileModal()" style="padding: 8px 20px; font-size: 0.9rem; margin-top: 10px;">閉じる</button>
+        </div>
+    </div>
+</div>
+
+<!-- トロフィーモーダル -->
+<div class="modal-overlay" id="trophyModal">
+    <div class="modal">
+        <div class="modal-image" id="modalTrophyImage"></div>
+        <h2 id="modalTrophyName"></h2>
+        <p id="modalTrophyDesc"></p>
+        <p class="modal-rarity" id="modalTrophyRarity"></p>
+        <button class="close-btn" onclick="closeTrophyModal()">閉じる</button>
+    </div>
+</div>
+
+<script>
+    function openProfileModal() {
+        const modal = document.getElementById('profileModal');
+        if(modal) {
+            modal.style.display = 'flex';
+            // モーダル外クリックで閉じるイベントを設定
+            modal.onclick = function(event) {
+                if (event.target === modal) {
+                    closeProfileModal();
+                }
+            };
+        }
+    }
+    function closeProfileModal() {
+        const modal = document.getElementById('profileModal');
+        if(modal) modal.style.display = 'none';
+    }
+    // ESCキー対応
+    document.addEventListener('keydown', function(event) {
+        if (event.key === 'Escape') {
+            const modal = document.getElementById('profileModal');
+            if (modal && modal.style.display === 'flex') {
+                closeProfileModal();
+            }
+        }
+    });
+
+    // トロフィモード初期化（直ちに実行）
+    (function initTrophyMode() {
+        // トロフィーモーダルの管理
+        const trophyModal = {
+            modal: null,
+            name: null,
+            desc: null,
+            rarity: null,
+            image: null,
+
+            init() {
+                this.modal = document.getElementById('trophyModal');
+                this.name = document.getElementById('modalTrophyName');
+                this.desc = document.getElementById('modalTrophyDesc');
+                this.rarity = document.getElementById('modalTrophyRarity');
+                this.image = document.getElementById('modalTrophyImage');
+            },
+
+            open(id, name, desc, rarity, rarityDisplay, isUnlocked) {
+                if (isUnlocked) {
+                    this.name.textContent = name;
+                    this.desc.textContent = desc;
+                    this.rarity.textContent = `レア度: ${rarityDisplay}`;
+                    this.rarity.className = `modal-rarity rarity-${rarity}`;
+                } else {
+                    this.name.textContent = "？？？";
+                    this.desc.textContent = desc; // 未取得でも説明文は出す
+                    this.rarity.textContent = "";
+                    this.rarity.className = "modal-rarity";
+                }
+
+                this.modal.style.display = "flex";
+            },
+
+            close() {
+                this.modal.style.display = "none";
+            }
+        };
+
+        // 初期化
+        trophyModal.init();
+
+        // グローバル関数（HTML側からonclickで呼ばれるため）
+        window.openTrophyModal = function(id, name, desc, rarity, rarityDisplay, isUnlocked) {
+            trophyModal.open(id, name, desc, rarity, rarityDisplay, isUnlocked);
+        };
+
+        window.closeTrophyModal = function() {
+            trophyModal.close();
+        };
+
+        // ESCキーでモーダルを閉じる
+        document.addEventListener('keydown', function(event) {
+            if (event.key === 'Escape' && trophyModal.modal.style.display === 'flex') {
+                trophyModal.close();
+            }
+        });
+
+        // モーダル外クリックで閉じる
+        trophyModal.modal.addEventListener('click', function(event) {
+            if (event.target === trophyModal.modal) {
+                trophyModal.close();
+            }
+        });
+    })();
+</script>

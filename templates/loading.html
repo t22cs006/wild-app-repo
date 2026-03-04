@@ -1,0 +1,56 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block content %}
+<div class="loading-container" style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 80vh; text-align: center;">
+    <h1 style="color: #4CAF50; margin-bottom: 20px; font-size: 2.5rem; font-weight: bold;">Wild App</h1>
+    
+    <!-- アプリアイコンや画像をここに配置しても良い -->
+    <!-- <img src="{% static 'images/logo.png' %}" alt="Logo" style="width: 100px; margin-bottom: 20px;"> -->
+
+    <div class="loader" style="
+        border: 6px solid #f3f3f3; 
+        border-top: 6px solid #4CAF50; 
+        border-radius: 50%; 
+        width: 60px; 
+        height: 60px; 
+        animation: spin 1s linear infinite;
+        margin-bottom: 20px;">
+    </div>
+    
+    <p style="font-size: 1.2rem; color: #555; font-weight: bold;">データを読み込んでいます...</p>
+    <p style="font-size: 0.9rem; color: #888; margin-top: 10px;">今日も一日、安全に調査しましょう！</p>
+</div>
+
+<style>
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+/* ナビゲーションなどを隠したい場合 */
+nav, .navbar {
+    display: none !important;
+}
+</style>
+
+<script>
+    window.addEventListener('load', function() {
+        // 並列処理：計算APIを呼び出しつつ、最低2.5秒は待つ
+        const minWaitPromise = new Promise(resolve => setTimeout(resolve, 2500));
+        
+        // トロフィー計算APIを非同期呼び出し
+        const apiPromise = fetch("{% url 'check_trophies_api' %}")
+            .then(res => res.json())
+            .catch(err => {
+                console.error("Trophy check failed:", err);
+                // エラーでも遷移はさせる
+                return { status: 'error' };
+            });
+
+        // 両方終わったら遷移
+        Promise.all([minWaitPromise, apiPromise]).then(() => {
+            window.location.href = "{% url 'dashboard' %}";
+        });
+    });
+</script>
+{% endblock %}

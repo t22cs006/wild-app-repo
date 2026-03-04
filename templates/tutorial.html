@@ -1,0 +1,116 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}操作手順・チュートリアル{% endblock %}
+
+{% block content %}
+<style>
+    .tutorial-container {
+        font-family: sans-serif;
+        margin: 20px;
+        line-height: 1.7;
+    }
+    .tutorial-container h1 {
+        border-left: 6px solid #FF9800;
+        padding-left: 10px;
+    }
+    .tutorial-container h2 {
+        margin-top: 30px;
+        color: #333;
+    }
+    .step {
+        background: #fafafa;
+        border-left: 4px solid #FF9800;
+        padding: 12px 16px;
+        margin: 12px 0;
+        border-radius: 4px;
+    }
+    .back-btn {
+        display: inline-block;
+        margin-top: 30px;
+        padding: 10px 18px;
+        background: #FF9800;
+        color: white;
+        text-decoration: none;
+        border-radius: 6px;
+    }
+</style>
+
+<div class="tutorial-container">
+
+<h1>操作手順・チュートリアル</h1>
+<p>
+このアプリでは、あなたの「観察」が私たちのデータ収集に貢献します。  
+まずは次の流れで、アプリの基本体験をしてみてください。
+</p>
+
+<div class="step">
+<strong>① みんなの地図を開く</strong><br>
+→ ヒートマップモードに切り替えて、任意の場所Aで投稿がないことを確認します。
+</div>
+
+<div class="step">
+<strong>② 任意の場所Aで「未発見」を投稿する</strong><br>
+→ 任意の場所をタップし投稿画面に移動し、投稿します。
+</div>
+
+<div class="step">
+<strong>③ 地図が変化したことを確認する</strong><br>
+→ 再度ヒートマップモードに戻り、任意の場所Aに投稿ができたことを確認します。
+</div>
+
+<div class="step">
+<strong>④ MYコレクションモードに切り替えて、トロフィーを確認する</strong><br>
+→ 初投稿やログイン日数に応じて、トロフィーが獲得できることがあります。
+</div>
+
+<p>以下では、各機能をもう少し詳しく説明します。</p>
+
+<h2>① みんなの地図（探索モード）</h2>
+<div class="step">
+    ・地図は 250m グリッドを基本に、拡大・縮小で可変表示されます。<br>
+    ・グリッドの色で状態が分かります：<br>
+    　- <strong>発見</strong>：生物が見つかったエリア<br>
+    　- <strong>未発見</strong>：見つからなかったエリア<br>
+    　- <strong>未投稿（空白）</strong>：まだ誰も報告していないエリア<br>
+    　- <strong>おすすめ</strong>：投稿が少なく調査価値が高いエリア<br>
+    ・ヒートマップモードでは、投稿の偏りや密度を視覚的に確認できます。
+</div>
+
+<h2>② 投稿の方法</h2>
+<div class="step">
+    ・現在地または地図上の任意の場所をタップして投稿できます。<br>
+    ・みんなのマップの任意の場所をタップして投稿することもできます。<br>
+    ・MYコレクションのマップの任意の場所をタップして投稿することもできます。<br>
+    ・「発見」または「未発見」を選択してください。<br>
+    ・未発見でも空白エリアが埋まり、調査に貢献できます。
+</div>
+
+<h2>③ 危険地帯の確認</h2>
+<div class="step">
+    ・危険地帯は黄色のグリッドで表示されます。<br>
+    ・フィールドワーク時の安全確保に役立ちます。<br>
+    ・切り替え機能は今後追加予定です。
+</div>
+
+<h2>④ MYコレクション（あなたの成果）</h2>
+<div class="step">
+    ・あなたが埋めたグリッドが地図上で確認できます。<br>
+    ・250m グリッドを 3×3 にまとめた「大きいパズル」も表示されます。<br>
+    ・トロフィー画面では、ログイン日数・投稿数・連続投稿などの実績が確認できます。<br>
+    ・ユーザープロフィールから進行状況を一覧できます。
+</div>
+
+<h2>⑤ 継続ボーナスとトロフィー</h2>
+<div class="step">
+    ・毎日ログインすると「連続ログイン日数」が増えます。<br>
+    ・投稿数や新規開拓、連続投稿などに応じてトロフィーが獲得できます。<br>
+    ・新しいトロフィーを獲得すると、ダッシュボードに通知が表示されます。
+</div>
+
+<div style="text-align: center; margin-top: 40px; margin-bottom: 40px;">
+    <a href="{% url 'dashboard' %}" class="btn btn-primary">
+        ダッシュボード画面に戻る
+    </a>
+</div>
+{% endblock %}

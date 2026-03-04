@@ -1,0 +1,444 @@
+<!-- 探索マップとパズルモード -->
+
+<!-- パズル画像配置場所 -->
+<div id="puzzle-container">
+    <img id="puzzle-image" src="" alt="Puzzle Image">
+</div>
+
+<div id="map"></div>
+
+<script>
+// 直ちに初期化
+(function initMapMode() {
+    // 定数定義
+    const CONFIG = {
+        centerLat: {{ CENTER_LAT }},
+        centerLon: {{ CENTER_LON }},
+        GRID_SIZE: {{ GRID_SIZE }},
+        MIN_LAT: {{ MIN_LAT }},
+        MAX_LAT: {{ MAX_LAT }},
+        MIN_LON: {{ MIN_LON }},
+        MAX_LON: {{ MAX_LON }},
+    };
+
+    const totalCols = Math.floor((CONFIG.MAX_LON - CONFIG.MIN_LON) / CONFIG.GRID_SIZE);
+    const totalRows = Math.floor((CONFIG.MAX_LAT - CONFIG.MIN_LAT) / CONFIG.GRID_SIZE);
+    const TOTAL_GRIDS = totalCols * totalRows;
+
+    // グローバル変数
+    let map;
+    let gridLayer;
+    let selectedRectangle = null;
+    let dangerData = {};
+    let collectionData = {};
+    const PUZZLE_FACTOR = 3; 
+    const PUZZLE_IMAGE_URL = "{{ puzzle.image.url }}";
+    
+    // 現在のモード (explore or puzzle)
+    const currentMode = '{{ current_mode }}';
+
+    // ユーティリティ関数
+    function log(message, ...args) {
+        console.log(`[${currentMode}] ${message}`, ...args);
+    }
+
+    // 地図初期化
+    function initMap() {
+        if (currentMode === 'explore') {
+            initExploreMode();
+        } else if (currentMode === 'puzzle') {
+            initPuzzleMode();
+        }
+    }
+
+    function initExploreMode() {
+        map = L.map('map').setView([CONFIG.centerLat, CONFIG.centerLon], 14);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 16, minZoom: 11 }).addTo(map);
+        
+        addLocateControl(map); // ★現在地ボタン追加
+
+        // ズーム/グリッド情報表示コントロール
+        const infoControl = L.control({position: 'bottomleft'});
+        infoControl.onAdd = function (map) {
+            this._div = L.DomUtil.create('div', 'info-control');
+            this._div.style.padding = '6px 8px';
+            this._div.style.background = 'white';
+            this._div.style.boxShadow = '0 0 15px rgba(0,0,0,0.2)';
+            this._div.style.borderRadius = '5px';
+            this._div.style.fontSize = '14px';
+            this.update();
+            return this._div;
+        };
+        infoControl.update = function () {
+            const zoom = map.getZoom();
+            // グリッドサイズはこのモードでは固定(250m)だが、明示すると親切
+            this._div.innerHTML = `<b>Zoom Level: ${zoom}</b><br>Grid Size: 250m`;
+        };
+        infoControl.addTo(map);
+
+        map.on('zoomend', function() {
+            infoControl.update();
+        });
+
+        document.getElementById('map').style.display = 'block';
+        document.getElementById('puzzle-container').style.display = 'none';
+        gridLayer = L.layerGroup().addTo(map);
+    }
+
+    async function initPuzzleMode() {
+        document.getElementById('map').style.display = 'none';
+        const container = document.getElementById('puzzle-container');
+        container.style.display = 'block';
+        
+        // ローディング表示
+        container.innerHTML = '<div class="puzzle-loading">Loading Puzzle...</div>';
+
+        // 画像のプリロード
+        const img = new Image();
+        img.src = PUZZLE_IMAGE_URL;
+
+        try {
+            await loadImage(img);
+            // ロード完了後に描画
+            drawPuzzleGrid();
+        } catch (error) {
+            console.error("Failed to load puzzle image:", error);
+            container.innerHTML = '<p style="color:white; text-align:center; padding-top:100px;">画像を読み込めませんでした。</p>';
+        }
+    }
+
+    function loadImage(img) {
+        return new Promise((resolve, reject) => {
+            img.onload = resolve;
+            img.onerror = reject;
+        });
+    }
+
+    // データ取得
+    async function loadData() {
+        try {
+            const [dangerRes, collectionRes] = await Promise.all([
+                fetch("/dangergrid/api/"),
+                fetch("/collectionmap/api/my/")
+            ]);
+            dangerData = await dangerRes.json();
+            collectionData = await collectionRes.json();
+            if (currentMode === 'explore') drawGrid();
+            else if (currentMode === 'puzzle') {
+                 // 画像ロードを待つためにinitPuzzleMode内で描画するが、
+                 // データロードが遅れた場合のためにここでも呼べるようにしておく必要があるかも？
+                 // 現在の構造だと、initTrophyMode等はDOMContentLoadedで呼ばれている。
+                 // loadDataはその後呼ばれるかわからないが、とりあえずデータ更新後に再描画するならここ。
+                 // 画像ロード済みフラグとかが無いとちらつく可能性はあるが、initPuzzleModeが呼ばれていれば画像はブラウザキャッシュにあるはず。
+                 const container = document.getElementById('puzzle-container');
+                 // まだLoading中ならinitPuzzleModeに任せる
+                 if (!container.querySelector('.puzzle-loading')) {
+                     drawPuzzleGrid();
+                 }
+            }
+            
+        } catch (error) {
+            console.error("データ読み込みエラー:", error);
+        }
+    }
+
+    // グリッド描画
+    function drawGrid() {
+        if (currentMode === 'explore') {
+            drawExploreGrid();
+        }
+    }
+
+    function drawExploreGrid() {
+        // グリッドインデックスベースでループさせることで浮動小数点誤差とズレを防ぐ
+        for (let gy = 0; gy < totalRows; gy++) {
+            for (let gx = 0; gx < totalCols; gx++) {
+                const lat = CONFIG.MIN_LAT + gy * CONFIG.GRID_SIZE;
+                const lon = CONFIG.MIN_LON + gx * CONFIG.GRID_SIZE;
+                
+                const key = `${gx},${gy}`;
+                const style = getGridStyle(key);
+                
+                // bounds: [南西, 北東]
+                // Python側の gx, gy と一致させるには、左下(南西)基準で (gx, gy) の領域を描画する
+                const bounds = [[lat, lon], [lat + CONFIG.GRID_SIZE, lon + CONFIG.GRID_SIZE]];
+
+                const rect = L.rectangle(bounds, style).addTo(gridLayer);
+                rect.on("click", (e) => handleGridClick(e, rect, key));
+            }
+        }
+    }
+
+    // ---------------------------------------------------------
+    // パズル描画・集約ロジック
+    // ---------------------------------------------------------
+    function drawPuzzleGrid() {
+        const container = document.getElementById('puzzle-container');
+        container.innerHTML = ''; // クリア
+
+        // 集約グリッド数 (切り上げ)
+        const puzzleCols = Math.ceil(totalCols / PUZZLE_FACTOR);
+        const puzzleRows = Math.ceil(totalRows / PUZZLE_FACTOR);
+
+        const pieceWidth = container.offsetWidth / puzzleCols;
+        const pieceHeight = container.offsetHeight / puzzleRows;
+
+        // 画面上部(py=0) から描画ループ
+        for (let py = 0; py < puzzleRows; py++) {
+            for (let px = 0; px < puzzleCols; px++) {
+                
+                // 3x3ブロック内の状況を集計
+                const stats = aggregateBlock(px, py, PUZZLE_FACTOR, puzzleRows);
+
+                const div = document.createElement('div');
+                div.className = 'puzzle-piece';
+                
+                // 配置
+                div.style.left = `${px * pieceWidth}px`;
+                div.style.top = `${py * pieceHeight}px`;
+                div.style.width = `${pieceWidth}px`;
+                div.style.height = `${pieceHeight}px`;
+
+                // 画像設定 (background-positionで当該エリアを切り抜き)
+                div.style.backgroundSize = `${puzzleCols * 100}% ${puzzleRows * 100}%`;
+                div.style.backgroundPosition = `-${px * 100}% -${py * 100}%`;
+
+                // 状態に応じたスタイル適用
+                applyPieceStyle(div, stats);
+
+                // クリックイベント
+                div.addEventListener('click', (e) => {
+                    // ポップアップを表示 
+                    showPuzzlePopup(e, div, px, py, pieceWidth, pieceHeight, stats);
+                });
+
+                container.appendChild(div);
+            }
+        }
+    }
+
+    /**
+     * 指定されたパズルブロック（factor x factor）に含まれる250mグリッドの状況を集計する
+     */
+    function aggregateBlock(px, py, factor, puzzleRows) {
+        let visitedCount = 0;
+        let totalCount = 0;
+
+        // py=0 (Top) -> gy = totalRows - 1 付近
+        // 画面の上端(py=0)に対応するデータの上端(gy)を計算
+        // データ全体の上端は totalRows - 1
+        // ブロックは上から py 個目なので、 gy は下がる
+        const startGy = (totalRows - 1) - (py * factor); 
+
+        for (let dy = 0; dy < factor; dy++) {
+            for (let dx = 0; dx < factor; dx++) {
+                // グローバルデータ座標
+                const gx = px * factor + dx;
+                const gy = startGy - dy; // 下に向かってスキャン
+
+                // 範囲外チェック (gy < 0 もチェック)
+                if (gx >= totalCols || gy < 0) continue;
+
+                const key = `${gx},${gy}`;
+                
+                // Dangerエリアならカウント対象外（分母に入れない）
+                // これにより「最初から埋まっている」扱い（分母を減らす）にする
+                if (dangerData[key]) {
+                    continue;
+                }
+
+                totalCount++;
+                
+                if (collectionData[key] && (collectionData[key].present > 0 || collectionData[key].absent > 0)) {
+                    visitedCount++;
+                }
+            }
+        }
+
+        return { visited: visitedCount, total: totalCount };
+    }
+
+    /**
+     * 集計結果に基づいて表示スタイルを適用
+     */
+    function applyPieceStyle(div, stats) {
+        // 背景画像URL
+        const bgUrl = `url(${PUZZLE_IMAGE_URL})`;
+
+        // ケース1: 完了（全て埋まった、または全部Dangerで探索対象なし） -> クリア表示
+        // 先に判定することで、0/0 (全Danger) の場合もクリア扱いになる
+        if (stats.visited === stats.total) {
+            div.style.backgroundImage = bgUrl;
+            div.style.opacity = '1.0';
+            div.style.zIndex = '2'; // 少し前面へ
+            div.style.boxShadow = 'inset 0 0 0 1px rgba(255,255,255,0.4)';
+            return;
+        }
+
+        // ケース2: 未踏（0個） -> ロック状態
+        if (stats.visited === 0) {
+            div.style.backgroundImage = 'none';
+            div.style.backgroundColor = '#23c754'; // ロック色
+            div.style.opacity = '0.9';
+            return;
+        }
+
+        // ケース3: 進行中
+        div.style.backgroundImage = bgUrl;
+        div.style.opacity = '0.8';
+    }
+
+    /**
+     * パズル用ポップアップ表示
+     */
+    function showPuzzlePopup(e, div, px, py, pieceWidth, pieceHeight, stats) {
+        e.stopPropagation();
+
+        // 既存削除
+        const existing = document.querySelector('.puzzle-popup');
+        if (existing) existing.remove();
+
+        // 座標計算 (ブロックの中心)
+        const factor = PUZZLE_FACTOR;
+        const startGy = (totalRows - 1) - (py * factor);
+        
+        // 中心付近のデータ座標(float)
+        const centerGx = (px * factor) + (factor / 2.0);
+        const centerGy = startGy - (factor / 2.0); // startGyから下に0.5ブロック分
+
+        const lon = CONFIG.MIN_LON + centerGx * CONFIG.GRID_SIZE;
+        const lat = CONFIG.MIN_LAT + centerGy * CONFIG.GRID_SIZE;
+
+        const tapLat = lat.toFixed(6);
+        const tapLon = lon.toFixed(6);
+
+        const url = `https://www.google.com/maps?q=${tapLat},${tapLon}`;
+        const post_url = `/posts/create/?lat=${tapLat}&lon=${tapLon}`;
+
+        // -------------------------------------------------------------
+        // 表示位置判定ロジック
+        // - 上半分(py < puzzleRows/2)なら下に表示
+        // - 下半分なら上に表示
+        // -------------------------------------------------------------
+        const puzzleRows = Math.ceil(totalRows / PUZZLE_FACTOR);
+        const isTopHalf = py < (puzzleRows / 2);
+        
+        const popup = document.createElement('div');
+        // クラス分けで矢印の向きやマージン方向を変える
+        popup.className = `puzzle-popup ${isTopHalf ? 'position-bottom' : 'position-top'}`;
+
+        popup.innerHTML = `
+            <span class="close" onclick="this.parentElement.remove()">&times;</span>
+            <div>
+                <b>エリア情報</b><br>
+                <div style="margin: 5px 0; font-size: 0.9em; color: #666;">
+                    発見状況: <b>${stats.visited} / ${stats.total}</b>
+                </div>
+                <hr style="margin: 5px 0; border: 0; border-top: 1px solid #eee;">
+                <a href="${url}" target="_blank">Google Map で開く</a>
+                <a href="${post_url}">ここに投稿を作成</a>
+            </div>
+        `;
+        
+        // 位置調整: コンテナ相対座標
+        const rect = div.getBoundingClientRect();
+        const containerRect = document.getElementById('puzzle-container').getBoundingClientRect();
+        
+        const relLeft = rect.left - containerRect.left;
+        const relTop = rect.top - containerRect.top;
+
+        // X軸は常にピースの中央
+        popup.style.left = `${relLeft + pieceWidth / 2}px`;
+
+        if (isTopHalf) {
+            // 下に表示する場合: ピースの下端を基準にする
+            popup.style.top = `${relTop + pieceHeight}px`;
+        } else {
+            // 上に表示する場合: ピースの上端を基準にする
+            popup.style.top = `${relTop}px`;
+        }
+
+        document.getElementById('puzzle-container').appendChild(popup);
+
+        // コンテナの外クリックで閉じるためのイベントリスナー
+        const closeHandler = (ev) => {
+            if (!popup.contains(ev.target) && ev.target !== div) {
+                popup.remove();
+                document.removeEventListener('click', closeHandler);
+            }
+        };
+        setTimeout(() => document.addEventListener('click', closeHandler), 0);
+    }
+
+
+
+    function getGridStyle(key) {
+        let fillColor = "#000000";
+        let strokeColor = "#ffffff";
+        let opacity = 0.3;
+
+        if (dangerData[key]) {
+            fillColor = "#ffcc00";
+            opacity = 0.6;
+        } else if (collectionData[key]) {
+            const { present, absent } = collectionData[key];
+            if (present > 0 && absent > 0) fillColor = "#aa44ff";
+            else if (present > 0) fillColor = "#ff4444";
+            else if (absent > 0) fillColor = "#4488ff";
+            opacity = 0.6;
+        }
+
+        return { color: strokeColor, weight: 2, fillColor, fillOpacity: opacity };
+    }
+
+    function handleGridClick(e, rect, key) {
+        if (selectedRectangle) {
+            selectedRectangle.setStyle({ weight: 1, color: "#ffffff" });
+        }
+        rect.setStyle({ weight: 4, color: "red" });
+        selectedRectangle = rect;
+
+        const tapLat = e.latlng.lat.toFixed(6);
+        const tapLon = e.latlng.lng.toFixed(6);
+        const url = `https://www.google.com/maps?q=${tapLat},${tapLon}`;
+        const post_url = `/posts/create/?lat=${tapLat}&lon=${tapLon}`;
+
+        if (dangerData[key]) {
+            L.popup()
+                .setLatLng(e.latlng)
+                .setContent(`
+                    <div class="map-popup-style" style="color:red;">
+                        <b>⚠️ 危険地点</b><br>
+                        <hr style="margin: 5px 0;">
+                        <p style="font-weight:bold; margin-bottom:5px;">理由：${dangerData[key]}</p>
+                        <hr style="margin: 5px 0; border: 0; border-top: 1px solid #ecc;">
+                        <a href="${url}" target="_blank" style="color:#d32f2f;">Google Map で開く</a>
+                        <a href="${post_url}" style="color:#d32f2f;">ここに投稿を作成 (注意)</a>
+                    </div>
+                `)
+                .openOn(map);
+            return;
+        }
+
+        L.popup()
+            .setLatLng(e.latlng)
+            .setContent(`
+                <div class="map-popup-style">
+                    <b>エリア情報</b><br>
+                    <hr style="margin: 5px 0; border: 0; border-top: 1px solid #eee;">
+                    <a href="${url}" target="_blank">Google Map で開く</a>
+                    <a href="${post_url}">ここに投稿を作成</a>
+                </div>
+            `)
+            .openOn(map);
+    }
+
+    function handlePuzzleClick(key) {
+        alert(`グリッド ${key} をクリックしました。`);
+    }
+
+    // 初期化
+    initMap();
+    loadData();
+})();
+</script>

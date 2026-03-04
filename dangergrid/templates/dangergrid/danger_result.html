@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h2>危険グリッド一括登録</h2>
+
+<form method="post" enctype="multipart/form-data">
+    {% csrf_token %}
+    <p>CSV（gx,gy,reason）をアップロードしてください。</p>
+    <input type="file" name="csv" required>
+    <button type="submit">登録</button>
+</form>
+
+{% endblock %}

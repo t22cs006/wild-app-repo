@@ -1,0 +1,102 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block content %}
+<div class="container mt-4">
+
+    <h2 class="mb-3">投稿が完了しました</h2>
+
+    <!-- 投稿内容の表示 -->
+    <div class="alert alert-info">
+        {% if presence == "present" %}
+            <strong>観測成功！</strong> この場所で生き物を確認しました。
+            <br>種類: {{ species }}
+        {% else %}
+            <strong>観測なし。</strong> この場所では生き物は見つかりませんでした。
+        {% endif %}
+        <br>
+        グリッド座標: ({{ gx }}, {{ gy }})  
+        <br>
+        緯度経度: {{ lat }}, {{ lon }}
+        <br>
+        時刻: {{ timestamp }}
+        <br>
+    </div>
+
+    {% if new_trophies %}
+    <div class="trophy-alert" style="background-color: #fff9c4; border: 2px solid #fbc02d; border-radius: 10px; padding: 15px; margin-bottom: 20px;">
+        <h3 style="color: #f57f17; margin-top: 0;">🏆 トロフィーを獲得しました！</h3>
+        {% for t in new_trophies %}
+        <div style="display: flex; align-items: center; margin-top: 10px; border-bottom: 1px solid #fdd835; padding-bottom: 10px;">
+            <span style="font-size: 2.5em; margin-right: 15px;">{{ t.icon }}</span>
+            <div>
+                <strong style="font-size: 1.1em; color: #333;">{{ t.name }}</strong>
+                <p style="margin: 0; color: #666; font-size: 0.9em;">{{ t.description }}</p>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    <!-- ミニマップ -->
+    <div id="map" style="height: 300px; border: 1px solid #ccc;"></div>
+    
+    <div style="text-align: center; margin-top: 40px; margin-bottom: 40px;">
+        <a href="{% url 'dashboard' %}" class="btn btn-primary">
+            ダッシュボード画面に戻る
+        </a>
+    </div>
+
+</div>
+
+<!-- Leaflet 読み込み -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+<script>
+    // Python → JS に渡された値
+    const lat = {{ lat }};
+    const lon = {{ lon }};
+    const gx = {{ gx }};
+    const gy = {{ gy }};
+
+    // 定数（view から渡されたもの）
+    const MIN_LAT = {{ MIN_LAT }};
+    const MIN_LON = {{ MIN_LON }};
+    const GRID_SIZE = 0.0025;
+
+    // Leaflet マップ
+    const map = L.map('map', {
+        zoomControl: false,
+        attributionControl: false
+    }).setView([lat, lon], 16);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        maxZoom: 18,
+    }).addTo(map);
+
+
+    // グリッド矩形の計算
+    const lat1 = MIN_LAT + gy * GRID_SIZE;
+    const lon1 = MIN_LON + gx * GRID_SIZE;
+    const lat2 = lat1 + GRID_SIZE;
+    const lon2 = lon1 + GRID_SIZE;
+
+    // グリッド枠を描画
+    L.rectangle([[lat1, lon1], [lat2, lon2]], {
+        color: "#ff7800",
+        weight: 2
+    }).addTo(map);
+
+    // 投稿位置にマーカー
+    L.circleMarker([lat, lon], {
+        radius: 6,
+        color: "red",
+        fillColor: "red",
+        fillOpacity: 0.8
+    }).addTo(map);
+
+    // 表示範囲をグリッドに合わせる
+    map.fitBounds([[lat1, lon1], [lat2, lon2]]);
+</script>
+
+{% endblock %}

@@ -1,0 +1,606 @@
+{% extends "base.html" %}
+
+{% block title %}投稿作成{% endblock %}
+
+{% block extra_head %}
+{{ block.super }}
+
+<!-- Leaflet 読み込み -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+<!-- ページ固有の CSS -->
+<style>
+    /* ===== フォーム全体 ===== */
+    .card form {
+        display: flex;
+        flex-direction: column;
+        gap: 18px;
+    }
+
+    /* 各ブロック（白背景のカード風） */
+    .form-block {
+        background: #ffffff;
+        padding: 16px 20px;
+        border-radius: 10px;
+        box-shadow: 0 2px 6px rgba(0,0,0,0.08);
+    }
+
+    /* セクションタイトル */
+    .section-title {
+        font-size: 1.6rem;
+        font-weight: bold;
+        margin: 20px 0 10px;
+        color: #333;
+    }
+
+    /* ブロック内の見出し */
+    .form-block h3 {
+        margin: 0 0 10px;
+        font-size: 1.1rem;
+        color: #444;
+    }
+
+    /* ===== 入力系 ===== */
+
+    /* テキスト入力・日時入力 */
+    .form-block input[type="text"],
+    .form-block input[type="datetime-local"],
+    .form-block select {
+        width: 100%;
+        padding: 10px;
+        border: 1px solid #ccc;
+        border-radius: 6px;
+        font-size: 15px;
+        background: #fafafa;
+        box-sizing: border-box;
+    }
+
+    /* lat/lon は読み取り専用 */
+    #lat, #lon {
+        background: #e9e9e9;
+        cursor: not-allowed;
+    }
+
+    /* lat/lon を横並びにする */
+    .latlon-row {
+        display: flex;
+        gap: 10px;
+    }
+
+    .latlon-row input {
+        flex: 1; /* 同じ幅で並ぶ */
+    }
+
+
+    /* ラジオボタンのグループ */
+    .form-block input[type="radio"] {
+        margin-right: 6px;
+    }
+
+    .form-block label {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        margin-bottom: 6px;
+        cursor: pointer;
+    }
+
+    /* 動物種セレクト（小さくて開きやすい） */
+    .species-select {
+        width: 160px;
+        padding: 8px;
+        border-radius: 6px;
+        border: 1px solid #ccc;
+        background: #fafafa;
+        font-size: 15px;
+        cursor: pointer;
+    }
+
+    /* 画像アップロード */
+    #image-field input[type="file"] {
+        margin-top: 6px;
+    }
+
+    /* ===== ボタン ===== */
+
+    button[type="button"],
+    #get-location-btn {
+        background: #4caf50;
+        color: white;
+        border: none;
+        padding: 10px 14px;
+        border-radius: 6px;
+        cursor: pointer;
+        font-size: 15px;
+        margin-bottom: 12px;
+    }
+
+    button[type="button"]:hover {
+        background: #43a047;
+    }
+
+    .submit-btn-style {
+        background: #4caf50;
+        color: white;
+        border: none;
+        padding: 14px;
+        border-radius: 8px;
+        font-size: 17px;
+        cursor: pointer;
+        width: 100%;
+    }
+
+    .submit-btn-style:hover {
+        background: #43a047;
+    }
+
+
+    /* ===== スマホ対応 ===== */
+    @media (max-width: 600px) {
+        .form-block {
+            padding: 14px 16px;
+        }
+
+        .species-select {
+            width: 100%;
+        }
+    }
+
+</style>
+
+{% endblock %}
+
+{% block content %}
+
+<h2 class="section-title">投稿作成</h2>
+
+<div class="card">
+<form id="post-form" method="POST" enctype="multipart/form-data">
+    {% csrf_token %}
+
+    <!-- ============================
+         一括投稿モード トグル
+    ============================= -->
+    <div class="form-block mt-3">
+        <label>
+            <input type="checkbox" id="bulk-mode-toggle">
+            一括投稿モード（ルート上の不在をまとめて登録）
+        </label>
+    </div>
+
+    <!-- ============================
+         共通：時刻入力
+    ============================= -->
+    <div class="form-block">
+        <h3>時刻の入力方法</h3>
+        {{ form.time_mode }}
+    </div>
+
+    <div id="manual-time-section" class="form-block" style="display:none;">
+        <h3>手動で日時を入力</h3>
+        {{ form.manual_timestamp }}
+    </div>
+
+    <!-- ============================
+         単数投稿モード
+    ============================= -->
+    <div id="single-mode-fields">
+
+        <div class="form-block">
+            <h3>発見（遭遇できた） / 未発見（遭遇できなかった）</h3>
+            {{ form.presence }}
+        </div>
+
+        <div id="image-field" class="form-block">
+            <h3>画像（任意）</h3>
+            {{ form.image }}
+        </div>
+
+        <div id="species-field" class="form-block">
+            <h3>動物種</h3>
+            {{ form.species }}
+        </div>
+
+        <div class="form-block">
+            <button type="button" onclick="getLocation()">現在位置を取得</button>
+            <h3>位置情報（地図をクリック）</h3>
+
+            <div class="latlon-row">
+                <input type="text" id="lat" name="lat" readonly>
+                <input type="text" id="lon" name="lon" readonly>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- ============================
+         一括投稿モード
+    ============================= -->
+    <div id="bulk-mode-fields" style="display:none;">
+        <div class="alert alert-secondary mt-2">
+            マップ上をタップして複数の地点を選択できます。<br>
+            選択した地点は「不在」としてまとめて投稿されます。
+        </div>
+    </div>
+
+    <!-- ============================
+         共通：マップ（ここが重要）
+    ============================= -->
+    <div id="map" style="height: 350px; border-radius: 10px;"></div>
+
+    <!-- ============================
+         モード別 submit ボタン
+    ============================= -->
+    <button id="single-submit-btn" type="submit" class="submit-btn-style mt-3">
+        投稿する
+    </button>
+
+    <button id="bulk-submit-btn" type="button" class="submit-btn-style mt-3" style="display:none;">
+        このルートを不在として登録
+    </button>
+
+</form>
+<div style="text-align: center; margin-top: 40px; margin-bottom: 40px;">
+    <a href="{% url 'dashboard' %}" class="btn btn-primary">
+        ダッシュボード画面に戻る
+    </a>
+</div>
+</div>
+
+
+<script>
+    const lat = "{{ lat }}";
+    const lon = "{{ lon }}";
+
+    if (lat !== "" && lon !== "") {
+        document.getElementById("lat").value = lat;
+        document.getElementById("lon").value = lon;
+    }
+</script>
+
+<script>
+    // 定数定義
+    const CONFIG = {
+        centerLat: {{ CENTER_LAT }},
+        centerLon: {{ CENTER_LON }},
+        GRID_SIZE: {{ GRID_SIZE }},
+        GRID_ROWS: {{ GRID_ROWS }},
+        GRID_COLS: {{ GRID_COLS }},
+        MIN_LAT: {{ MIN_LAT }},
+        MAX_LAT: {{ MAX_LAT }},
+        MIN_LON: {{ MIN_LON }},
+        MAX_LON: {{ MAX_LON }},
+    };
+
+    // グローバル変数
+    let map;
+    let marker = null;
+    let gridLayer;
+    let dangerData = {};
+    const isSuperUser = {{ request.user.is_superuser|yesno:"true,false" }};
+    console.log("isSuperUser:", isSuperUser);
+    let bulkMode = false;
+    let selectedGrids = new Set();   // "gx,gy"
+    let selectedMarkers = {};        // 表示用
+
+    // 位置情報取得
+    function getLocation() {
+        if (navigator.geolocation) {
+            navigator.geolocation.getCurrentPosition((pos) => {
+                const lat = pos.coords.latitude;
+                const lon = pos.coords.longitude;
+                document.getElementById("lat").value = lat;
+                document.getElementById("lon").value = lon;
+                
+                // 地図移動 & マーカー更新
+                map.setView([lat, lon], 16);
+                updateMarker([lat, lon]);
+                document.getElementById("single-submit-btn").disabled = false;
+            });
+        } else {
+            alert("位置情報が取得できません");
+        }
+    }
+
+    // マーカー更新
+    function updateMarker(latlng) {
+        if (marker) map.removeLayer(marker);
+        marker = L.marker(latlng).addTo(map);
+    }
+
+    // フォームクリア
+    function clearForm() {
+        document.getElementById("lat").value = "";
+        document.getElementById("lon").value = "";
+        if (marker) {
+            map.removeLayer(marker);
+            marker = null;
+        }
+        document.getElementById("submit-btn").disabled = true;
+    }
+
+    // データ取得
+    async function loadData() {
+        try {
+            // dangerData の取得
+            let response = await fetch("/dangergrid/api/", {
+                headers: { 'X-Requested-With': 'XMLHttpRequest' }
+            });
+
+            if (!response.ok) {
+                // セッション切れ等の場合
+                if (response.status === 403 || response.status === 401 || response.url.includes("login")) {
+                    console.warn("Session problem. Redirecting to login...");
+                    window.location.href = "{% url 'login' %}";
+                    return;
+                }
+                throw new Error("HTTP error " + response.status);
+            }
+
+            // HTMLが返ってきていないかチェック (Content-Type)
+            const contentType = response.headers.get("content-type");
+            if (contentType && contentType.indexOf("application/json") === -1) {
+                console.warn("Received HTML instead of JSON (likely login page).");
+                window.location.href = "{% url 'login' %}";
+                return;
+            }
+
+            dangerData = await response.json();
+            drawAllGrid();
+            drawDangerGrid();
+        } catch (error) {
+            console.error("Failed to load danger data:", error);
+            // 失敗してもグリッドは描く（投稿機能は止めない）
+            drawAllGrid();
+        }
+    }
+
+    // 全グリッド描画 (整数インデックスベース)
+    function drawAllGrid() {
+        for (let gy = 0; gy < CONFIG.GRID_ROWS; gy++) {
+            for (let gx = 0; gx < CONFIG.GRID_COLS; gx++) {
+                const lat = CONFIG.MIN_LAT + gy * CONFIG.GRID_SIZE;
+                const lon = CONFIG.MIN_LON + gx * CONFIG.GRID_SIZE;
+                
+                const bounds = [[lat, lon], [lat + CONFIG.GRID_SIZE, lon + CONFIG.GRID_SIZE]];
+                L.rectangle(bounds, {
+                    color: "#cccccc",
+                    fillOpacity: 0,
+                    weight: 1
+                }).addTo(gridLayer);
+            }
+        }
+    }
+
+    // 危険グリッド描画
+    function drawDangerGrid() {
+        for (const key in dangerData) {
+            const [gx, gy] = key.split(",").map(Number);
+            const lat = CONFIG.MIN_LAT + gy * CONFIG.GRID_SIZE;
+            const lon = CONFIG.MIN_LON + gx * CONFIG.GRID_SIZE;
+            const bounds = [[lat, lon], [lat + CONFIG.GRID_SIZE, lon + CONFIG.GRID_SIZE]];
+
+            L.rectangle(bounds, {
+                color: "#ffcc00",
+                fillColor: "#ffcc00",
+                fillOpacity: 0.6,
+                weight: 2
+            }).addTo(gridLayer);
+        }
+    }
+
+    // 地図初期化
+    function initMap() {
+        let viewLat = CONFIG.centerLat;
+        let viewLon = CONFIG.centerLon;
+        let startZoom = 14;
+
+        // URLパラメータ等でlat/lonが指定されている場合は、その地点を中心に表示
+        if (lat && lon) {
+            viewLat = parseFloat(lat);
+            viewLon = parseFloat(lon);
+            startZoom = 15; // ピンポイントなので少しズーム
+        }
+
+        map = L.map('map').setView([viewLat, viewLon], startZoom);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 16, minZoom: 11 }).addTo(map);
+
+        // ズーム/グリッド情報表示コントロール
+        const infoControl = L.control({position: 'bottomleft'});
+        infoControl.onAdd = function (map) {
+            this._div = L.DomUtil.create('div', 'info-control');
+            this._div.style.padding = '6px 8px';
+            this._div.style.background = 'white';
+            this._div.style.boxShadow = '0 0 15px rgba(0,0,0,0.2)';
+            this._div.style.borderRadius = '5px';
+            this._div.style.fontSize = '14px';
+            this.update();
+            return this._div;
+        };
+        infoControl.update = function () {
+            const zoom = map.getZoom();
+            this._div.innerHTML = `<b>Zoom Level: ${zoom}</b><br>Grid Size: 250m`;
+        };
+        infoControl.addTo(map);
+
+        map.on('zoomend', function() {
+            infoControl.update();
+        });
+
+        gridLayer = L.layerGroup().addTo(map);
+        
+        if (lat && lon) {
+            marker = L.marker([lat, lon]).addTo(map);
+        }
+    }
+
+    function handleMapClick(e) {
+        const lat = e.latlng.lat.toFixed(6);
+        const lon = e.latlng.lng.toFixed(6);
+
+        const gx = Math.floor((lon - CONFIG.MIN_LON) / CONFIG.GRID_SIZE);
+        const gy = Math.floor((lat - CONFIG.MIN_LAT) / CONFIG.GRID_SIZE);
+        const key = `${gx},${gy}`;
+
+        // ★ 範囲外チェック
+        if (gx < 0 || gx >= CONFIG.GRID_COLS || gy < 0 || gy >= CONFIG.GRID_ROWS) {
+            console.log("クリック位置がグリッド範囲外です:", gx, gy);
+            return;
+        }
+
+        // danger 警告は出すが投稿は許可する
+        if (dangerData[key]) {
+            if (!isSuperUser) {
+                alert("⚠️ この地点は危険区域です。注意して投稿してください。");
+            } else {
+                alert("⚠️ 危険区域ですが、管理者のため投稿できます");
+            }
+        }
+
+        // 投稿可能にする
+        document.getElementById("single-submit-btn").disabled = false;
+        document.getElementById("lat").value = lat;
+        document.getElementById("lon").value = lon;
+
+        updateMarker([lat, lon]);
+    }
+
+
+    // 一括投稿モードのクリック処理
+    function handleBulkClick(e) {
+        if (!bulkMode) return;
+
+        const lat = e.latlng.lat;
+        const lon = e.latlng.lng;
+
+        const gx = Math.floor((lon - CONFIG.MIN_LON) / CONFIG.GRID_SIZE);
+        const gy = Math.floor((lat - CONFIG.MIN_LAT) / CONFIG.GRID_SIZE);
+        const key = `${gx},${gy}`;
+
+        // ★ 範囲外チェック
+        if (gx < 0 || gx >= CONFIG.GRID_COLS || gy < 0 || gy >= CONFIG.GRID_ROWS) {
+            console.log("クリック位置がグリッド範囲外です:", gx, gy);
+            return;
+        }
+
+        // danger 警告
+        if (dangerData[key] && !isSuperUser) {
+            if (!confirm("⚠️ この地点は危険区域です。選択しますか？")) {
+                return;
+            }
+        }
+
+        // すでに選択済みなら解除
+        if (selectedGrids.has(key)) {
+            selectedGrids.delete(key);
+            map.removeLayer(selectedMarkers[key]);
+            delete selectedMarkers[key];
+            return;
+        }
+
+        // 新規選択
+        selectedGrids.add(key);
+
+        const centerLat = CONFIG.MIN_LAT + gy * CONFIG.GRID_SIZE + CONFIG.GRID_SIZE / 2;
+        const centerLon = CONFIG.MIN_LON + gx * CONFIG.GRID_SIZE + CONFIG.GRID_SIZE / 2;
+
+        const marker = L.circleMarker([centerLat, centerLon], {
+            radius: 6,
+            color: "blue",
+            fillColor: "blue",
+            fillOpacity: 0.8
+        }).addTo(map);
+
+        selectedMarkers[key] = marker;
+    }
+
+    // 一括選択リセット
+    function clearBulkSelection() {
+        selectedGrids.clear();
+        for (const key in selectedMarkers) {
+            map.removeLayer(selectedMarkers[key]);
+        }
+        selectedMarkers = {};
+    }
+
+
+    // イベントリスナー設定
+    function setupEventListeners() {
+        map.on('click', handleMapClick);
+
+        // presence
+        document.querySelectorAll('input[name="presence"]').forEach(radio => {
+            radio.addEventListener("change", () => {
+                document.getElementById("image-field").style.display = (radio.value === "present") ? "block" : "none";
+                document.getElementById("species-field").style.display = (radio.value === "present") ? "block" : "none";
+            });
+        });
+
+        // time_mode
+        document.querySelectorAll('input[name="time_mode"]').forEach(radio => {
+            radio.addEventListener("change", () => {
+                document.getElementById("manual-time-section").style.display = (radio.value === "manual") ? "block" : "none";
+            });
+        });
+
+        // 一括投稿モード切替
+        document.getElementById("bulk-mode-toggle").addEventListener("change", function() {
+            bulkMode = this.checked;
+
+            // UI 切替
+            document.getElementById("single-mode-fields").style.display = bulkMode ? "none" : "block";
+            document.getElementById("bulk-mode-fields").style.display = bulkMode ? "block" : "none";
+            document.getElementById("single-submit-btn").style.display = bulkMode ? "none" : "block";
+            document.getElementById("bulk-submit-btn").style.display = bulkMode ? "block" : "none";
+
+            // クリック処理切替
+            if (bulkMode) {
+                map.off("click", handleMapClick);
+                map.on("click", handleBulkClick);
+            } else {
+                map.off("click", handleBulkClick);
+                map.on("click", handleMapClick);
+                clearBulkSelection();
+            }
+        });
+    }
+
+    document.getElementById("bulk-submit-btn").addEventListener("click", function() {
+        // selectedGrids → JSON 化
+        // hidden input に入れて form.submit()
+        if (selectedGrids.size === 0) {
+            alert("地点が選択されていません。");
+            return;
+        }
+
+        // gx,gy → lat,lon（中心座標）に変換して送信
+        const points = [];
+        selectedGrids.forEach(key => {
+            const [gx, gy] = key.split(",").map(Number);
+            const lat = CONFIG.MIN_LAT + gy * CONFIG.GRID_SIZE + CONFIG.GRID_SIZE / 2;
+            const lon = CONFIG.MIN_LON + gx * CONFIG.GRID_SIZE + CONFIG.GRID_SIZE / 2;
+
+            points.push({ gx, gy, lat, lon });
+        });
+
+        // hidden input に JSON を入れて submit
+        const form = document.getElementById("post-form");
+        const input = document.createElement("input");
+        input.type = "hidden";
+        input.name = "points";
+        input.value = JSON.stringify(points);
+        form.appendChild(input);
+
+        form.action = "{% url 'bulk_absent' %}";
+        form.submit();
+    });
+
+    // 初期化
+    initMap();
+    setupEventListeners();
+    loadData();
+</script>
+
+
+{% endblock %}

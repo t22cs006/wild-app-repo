@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Wild App{% endblock %}</title>
+
+    {% load static %}
+    <link rel="stylesheet" href="{% static 'css/base.css' %}">
+    <link rel="stylesheet" href="{% static 'css/mobile_fix.css' %}">
+
+    <script>
+        // マップに現在地ボタンを追加する共通関数
+        function addLocateControl(map) {
+            const LocateControl = L.Control.extend({
+                onAdd: function(map) {
+                    const btn = L.DomUtil.create('button', 'leaflet-bar leaflet-control leaflet-control-locate');
+                    btn.innerHTML = '📍';
+                    btn.title = "現在地に移動";
+                    btn.onclick = function(e){
+                        L.DomEvent.stopPropagation(e);
+                        if (!navigator.geolocation) {
+                            alert("端末が位置情報に対応していません");
+                            return;
+                        }
+                        navigator.geolocation.getCurrentPosition(
+                            (pos) => {
+                                const lat = pos.coords.latitude;
+                                const lon = pos.coords.longitude;
+                                map.flyTo([lat, lon], 16);
+                                
+                                // 現在地マーカー（青丸）を表示
+                                if (window.currentLocCircle) map.removeLayer(window.currentLocCircle);
+                                window.currentLocCircle = L.circleMarker([lat, lon], {
+                                    radius: 8, fillColor: "#3388ff", color: "#fff", weight: 2, fillOpacity: 0.8
+                                }).addTo(map);
+                            },
+                            (err) => { alert("位置情報を取得できません: " + err.message); }
+                        );
+                    }
+                    return btn;
+                }
+            });
+            map.addControl(new LocateControl({ position: 'bottomright' }));
+        }
+    </script>
+
+    {% block extra_head %}{% endblock %}
+</head>
+<body>
+
+<header class="header">
+    <div class="header-title"><a href="{% url 'dashboard' %}">Wild App</a></div>
+    <div class="header-user">
+        {% if user.is_authenticated %}
+            <div style="display: flex; align-items: center; gap: 10px;">
+                <span>{{ user.username }}</span>
+                <form action="{% url 'logout' %}" method="post" style="margin: 0;">
+                    {% csrf_token %}
+                    <button type="submit" style="background: none; border: none; color: white; text-decoration: underline; cursor: pointer; font-size: 1rem; padding: 0;">ログアウト</button>
+                </form>
+            </div>
+        {% else %}
+            <a href="{% url 'login' %}">ログイン</a>
+        {% endif %}
+    </div>
+</header>
+
+<main class="main-container">
+    {% block content %}{% endblock %}
+</main>
+
+</body>
+</html>

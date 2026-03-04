@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+
+{% block title %}ログアウト{% endblock %}
+
+{% block content %}
+
+<div class="card" style="text-align: center; padding: 40px;">
+
+    <h2 style="margin-bottom: 20px; color: #4caf50;">
+        ログアウトしました
+    </h2>
+
+    <p style="margin-bottom: 30px; font-size: 1.1rem;">
+        またのご利用をお待ちしています。
+    </p>
+
+    <a href="{% url 'login' %}" class="btn" style="width: 60%;">
+        ログインページへ
+    </a>
+
+</div>
+
+{% endblock %}

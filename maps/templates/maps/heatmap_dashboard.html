@@ -1,0 +1,558 @@
+{% extends "base.html" %}
+
+{% block title %}Heatmap Dashboard{% endblock %}
+
+{% block extra_head %}
+{{ block.super }}
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+<style>
+    .heatmap-description {
+        margin: 10px 0 15px;
+        padding: 10px 14px;
+        background: #f4f7f4;
+        border-left: 4px solid #4caf50;
+        border-radius: 6px;
+        color: #333;
+        font-size: 14px;
+    }
+
+    /* 正方形マップ */
+    #map {
+        width: 100%;
+        aspect-ratio: 1 / 1;
+        border-radius: 10px;
+    }
+
+    .btn-area {
+        margin-bottom: 25px;
+        text-align: center;
+    }
+
+    /* 汎用ボタンスタイル（使わなくなったbutton要素のスタイルも一応残しつつ、selectにも適用） */
+    .btn-area select {
+        width: 100%;
+        padding: 10px;
+        font-size: 16px;
+        border-radius: 6px;
+        border: 2px solid #4caf50; /* 枠線を緑に */
+        background-color: #f9fff9; /* 薄い緑の背景 */
+        color: #333; /* 文字色は読みやすく */
+        font-weight: bold;
+        cursor: pointer;
+        appearance: none; /* デフォルトの矢印を消す（モダンブラウザ用） */
+        /* カスタム矢印を追加 */
+        background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%234caf50' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e");
+        background-repeat: no-repeat;
+        background-position: right 1rem center;
+        background-size: 1em;
+    }
+
+    .btn-area select:focus {
+        outline: none;
+        box-shadow: 0 0 0 3px rgba(76, 175, 80, 0.3);
+    }
+
+    .btn-area button:hover {
+        background: #3e8e41;
+    }
+
+    /* ポップアップ用スタイル */
+    .map-popup-style a {
+        display: block;
+        margin: 8px 0;
+        color: #4CAF50;
+        text-decoration: none;
+        font-weight: bold;
+    }
+    .map-popup-style a:hover {
+        text-decoration: underline;
+    }
+
+    /* Mode Layout (MyCollection style) */
+    .mode-header {
+        text-align: center;
+        margin-bottom: 20px;
+    }
+    .mode-content {
+        /* card styles imported here roughly */
+        background: #ffffff;
+        padding: 10px; /* スマホ向けに少し狭く */
+        border-radius: 10px;
+        /* main-containerが既に白背景・影付きなので、ここはフラットにするか、あるいは強調するか */
+        /* MyCollectionでは mode-content に shadow があるので合わせる */
+        /* ただし main-container 直下だと二重枠になるため、デザイン調整が必要かも知れませんが、構造を合わせます */
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+
+<div class="mode-container">
+    <div class="mode-content">
+        <div class="mode-header">
+            <h2>みんなのヒートマップ</h2>
+        </div>
+
+        <div class="btn-area">
+            <!-- スマホでも見やすいようにセレクトボックスに変更 -->
+            <select id="heatmap-selector" onchange="loadHeatmap(this.value)" style="width: 100%; padding: 10px; font-size: 16px; border-radius: 6px; border: 1px solid #ccc;">
+                <option value="present">出現ヒートマップ</option>
+                <option value="absent">非出現ヒートマップ</option>
+                <option value="total">観測ヒートマップ</option>
+                <option value="recommend">おすすめ観測地ヒートマップ</option>
+            </select>
+        </div>
+
+        <!-- ★ 説明文を表示する場所 --> 
+        <div id="heatmap-description" class="heatmap-description"></div>
+    
+        <div id="map" style="height: 350px;"></div>
+    </div>
+    <div style="text-align: center; margin-top: 40px; margin-bottom: 40px;">
+    <a href="{% url 'dashboard' %}" class="btn btn-primary">
+        ダッシュボード画面に戻る
+    </a>
+    </div>
+</div>
+
+
+<script>
+
+
+    // 定数定義
+    const CONFIG = {
+        centerLat: {{ CENTER_LAT }},
+        centerLon: {{ CENTER_LON }},
+        GRID_SIZE: {{ GRID_SIZE }},
+        MIN_LAT: {{ MIN_LAT }},
+        MAX_LAT: {{ MAX_LAT }},
+        MIN_LON: {{ MIN_LON }},
+        MAX_LON: {{ MAX_LON }},
+    };
+
+    //------------------------------------------------------
+    // グローバル変数
+    //------------------------------------------------------
+    let map;
+    let gridLayer;
+    let currentType = "present";
+    let originalData = {};   // 250m の生データを保持
+    let dangerData = {};
+    let selectedRectangle = null;
+
+
+    //------------------------------------------------------
+    // ズームに応じたグリッド倍率
+    //------------------------------------------------------
+    function getGridFactor(zoom) {
+        if (zoom >= 15) return 1;  // 250m
+        if (zoom >= 13) return 2;  // 500m
+        return 3;                  // 750m
+    }
+
+
+    //------------------------------------------------------
+    // 250m データを factor 倍に集約
+    //------------------------------------------------------
+    function aggregateGrid(data, factor) {
+        if (factor === 1) return data;
+
+        const aggregated = {};
+
+        for (const key in data) {
+            const [gx, gy] = key.split(",").map(Number);
+
+            const bigGx = Math.floor(gx / factor);
+            const bigGy = Math.floor(gy / factor);
+            const bigKey = `${bigGx},${bigGy}`;
+
+            if (!aggregated[bigKey]) aggregated[bigKey] = 0;
+            aggregated[bigKey] += data[key];
+        }
+
+        return aggregated;
+    }
+
+
+    //------------------------------------------------------
+    // ヒートマップ描画（factor 対応）
+    //------------------------------------------------------
+    function drawHeatmap(data, type, factor) {
+        const activeColor = getColor(type);
+        const step = CONFIG.GRID_SIZE * factor;  // 250m × factor
+
+        // 250m グリッドの最大 index. = 0 ~ ( index - 1 )
+        const maxGx = Math.floor((CONFIG.MAX_LON - CONFIG.MIN_LON) / CONFIG.GRID_SIZE);
+        const maxGy = Math.floor((CONFIG.MAX_LAT - CONFIG.MIN_LAT) / CONFIG.GRID_SIZE);
+
+        // factor ごとにまとめた gx,gy をループ
+        const bigMaxGx = Math.ceil(maxGx / factor);
+        const bigMaxGy = Math.ceil(maxGy / factor);
+
+        // 描画ループ. 0 ~ (index - 1)
+        for (let gy = 0; gy < bigMaxGy; gy++) {
+            for (let gx = 0; gx < bigMaxGx; gx++) {
+
+                const key = `${gx},${gy}`;
+                const style = getHeatmapStyle(key, data, type, activeColor);
+
+                const lon = CONFIG.MIN_LON + gx * step;
+                const lat = CONFIG.MIN_LAT + gy * step;
+
+                const bounds = [
+                    [lat, lon],
+                    [lat + step, lon + step]
+                ];
+
+                const rect = L.rectangle(bounds, style).addTo(gridLayer);
+
+                if (style.interactive !== false) {
+                    rect.on("click", (e) => handleGridClick(e, rect));
+                }
+            }
+        }
+    }
+
+    function drawDangerGrid(dangerData) {
+        const step = CONFIG.GRID_SIZE; // 250m 固定
+
+        for (const key in dangerData) {
+            const [gx, gy] = key.split(",").map(Number);
+            const info = dangerData[key];
+            
+            const lon = CONFIG.MIN_LON + gx * step;
+            const lat = CONFIG.MIN_LAT + gy * step;
+
+            const bounds = [[lat, lon], [lat + step, lon + step]];
+
+            const rect = L.rectangle(bounds, {
+                color: "#cccccc",
+                weight: 1,
+                fillColor: "#ffcc00",
+                fillOpacity: 0.5,
+            }).addTo(dangerLayer);
+
+            rect.on("click", function (e) {
+                L.DomEvent.stopPropagation(e);
+                handleDangerGridClick(e, gx, gy, info);
+            });
+
+        }
+    }
+
+
+
+    //------------------------------------------------------
+    // ズーム変更時・API取得後に呼ぶ
+    //------------------------------------------------------
+    function redrawHeatmap() {
+        if (!originalData[currentType]) return;
+
+        gridLayer.clearLayers();
+
+        const zoom = map.getZoom();
+        const factor = getGridFactor(zoom);
+
+        const baseData = originalData[currentType];   // 250m データ
+
+        const displayData = aggregateGrid(baseData, factor);
+
+        drawHeatmap(displayData, currentType, factor);
+        drawDangerGrid(dangerData);
+    }
+
+
+    //------------------------------------------------------
+    // API からデータ取得 → redrawHeatmap()
+    //------------------------------------------------------
+    async function loadHeatmap(type) {
+        currentType = type;
+
+        try {
+            // ロード中表示などのUIフィードバックを入れるとより親切
+            const res = await fetch(getApiUrl(type));
+            
+            // ★ リクエスト中に別のタイプに切り替えられていたら、古い結果は捨てる
+            const selector = document.getElementById("heatmap-selector");
+            if (selector && selector.value !== type) {
+                console.warn(`Type changed during fetch: ${type} -> ${selector.value}. Discarding result.`);
+                return;
+            }
+
+            const data = await res.json();
+
+            originalData[type] = data;  // 250m の生データを保存
+            redrawHeatmap();
+            updateHeatmapDescription(type);
+
+        } catch (error) {
+            console.error("Heatmap load error:", error);
+        }
+    }
+
+
+    //------------------------------------------------------
+    // dangergrid の読み込み
+    //------------------------------------------------------
+    async function loadData() {
+        try {
+            // マップが表示されるまで少し待つ（DOM描画対策）
+            await new Promise(r => setTimeout(r, 100));
+            map.invalidateSize(); // コンテナサイズ再計算
+
+            // 認証チェック：ログインしてなければリダイレクトされるのでHTMLが返ってくる
+            // その場合のエラーハンドリングが必要
+            let response = await fetch("/dangergrid/api/", {
+                headers: { 'X-Requested-With': 'XMLHttpRequest' }
+            });
+
+            if (!response.ok) {
+                 // 403 Forbidden や 401 Unauthorized ならログイン画面へ飛ばす等の処理
+                 if (response.status === 403 || response.status === 401 || response.url.includes("login")) {
+                     console.warn("Session expired or not logged in. Redirecting...");
+                     window.location.href = "{% url 'login' %}"; 
+                     return;
+                 }
+                 throw new Error("API response was not ok");
+            }
+
+            // HTMLが返ってきていないかチェック (Content-Type)
+            const contentType = response.headers.get("content-type");
+            if (contentType && contentType.indexOf("application/json") === -1) {
+                 // JSONじゃない（＝HTML、つまりログイン画面）
+                 console.warn("Received HTML instead of JSON. Redirecting to login.");
+                 window.location.href = "{% url 'login' %}"; 
+                 return;
+            }
+
+            dangerData = await response.json();
+
+            // 初期表示
+            await loadHeatmap("present");
+
+        } catch (error) {
+            console.error("Danger data load error:", error);
+            // 失敗してもヒートマップはロード試行する
+            await loadHeatmap("present");
+        }
+    }
+
+
+    //------------------------------------------------------
+    // 地図初期化
+    //------------------------------------------------------
+    function initMap() {
+        map = L.map('map').setView([CONFIG.centerLat, CONFIG.centerLon], 13);
+
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            maxZoom: 16,
+            minZoom: 12
+        }).addTo(map);
+
+        // ズーム/グリッド情報表示コントロール
+        const infoControl = L.control({position: 'bottomleft'});
+        infoControl.onAdd = function (map) {
+            this._div = L.DomUtil.create('div', 'info-control');
+            this._div.style.padding = '6px 8px';
+            this._div.style.background = 'white';
+            this._div.style.boxShadow = '0 0 15px rgba(0,0,0,0.2)';
+            this._div.style.borderRadius = '5px';
+            this._div.style.fontSize = '14px';
+            this.update();
+            return this._div;
+        };
+        infoControl.update = function () {
+            const zoom = map.getZoom();
+            const factor = getGridFactor(zoom);
+            const size = 250 * factor;
+            this._div.innerHTML = `<b>Zoom Level: ${zoom}</b><br>Grid Size: ${size}m`;
+        };
+        infoControl.addTo(map);
+
+        gridLayer = L.layerGroup().addTo(map);
+        dangerLayer = L.layerGroup().addTo(map);
+
+        // ズーム変更で再描画
+        map.on("zoomend", () => {
+            infoControl.update();
+            redrawHeatmap();
+        });
+    }
+
+
+        // 不透明度計算。ヒートマップ用。
+    function calcOpacity(data) {
+        // data が数値なら従来通り
+        if (typeof data === "number") {
+            const max_data = 5; // 仮の最大値
+            const mindataunit = 0.5 / max_data;
+            const opacity = 0.5 - ( mindataunit * data );
+            return Math.min(opacity, 0.5);
+        }
+
+        // data がオブジェクトなら、使いたい値を選ぶ
+        // 例：おすすめスポットは score を使う
+        if (typeof data === "object") {
+            const score = data.score;
+
+            // score は負の値なので、反転して濃度にする
+            const normalized = Math.max(0, -score);
+            const max_score = 8; // 仮の最大スコア
+            const minscoreunit = 0.5 / max_score
+            const opacity = 0.5 - ( minscoreunit * normalized );
+
+            return Math.min(opacity, 0.5);
+        }
+        //ともに最大値は0.5とする
+
+        return 0.1;
+    }
+
+    // API URL 生成
+    function getApiUrl(type) {
+        return `/maps/api/heatmap/${type}/`;
+    }
+
+    // ボタンタイプによる色取得
+    function getColor(type) {
+        const colors = {
+            present: "#ff4444",
+            absent: "#4488ff",
+            total: "#aa44ff",
+            recommend: "#ff4444",
+        };
+        return colors[type] || "#e0e0e0";
+    }
+
+    // グリッドスタイル取得
+    function getHeatmapStyle(key, data, type, activeColor) {
+        const strokeColor = "#cccccc";
+
+        // ★ 1. レコメンドモード
+        if (type === "recommend") {
+            if (data[key]) {
+                // スコア付きセル
+                return {
+                    color: strokeColor,
+                    weight: 1,
+                    fillColor: activeColor,
+                    fillOpacity: calcOpacity(data[key])
+                };
+            } else {
+                // 空白セルも描画
+                return {
+                    color: strokeColor,
+                    weight: 1,
+                    fillColor: "#ff4444",
+                    fillOpacity: 0.6
+                    //本来一番投稿が欲しいところ。データが少ないため薄めに表示。可視性が低下するのを防ぐ。
+                };
+            }
+        }
+
+        // ★ 2. 通常モード（present / absent / total）
+        if (data[key]) {
+            return {
+                color: strokeColor,
+                weight: 1,
+                fillColor: activeColor,
+                fillOpacity: calcOpacity(data[key])
+            };
+        } else {
+            // データなしセル（薄灰色）
+            return {
+                color: strokeColor,
+                weight: 1,
+                fillColor: "#cccccc",
+                fillOpacity: 0.01
+            };
+        }
+    }
+
+    // グリッドクリック処理
+    function handleGridClick(e, rect) {
+        // ★ 自動ズーム処理
+        // ズームレベルが15未満（グリッドが統合されている状態）の場合、
+        // 詳細が見えるレベル（15）までズームインして詳細を表示させる。
+        // ポップアップは出さず、ユーザーに正確なグリッドを選び直してもらう。
+        if (map.getZoom() < 15) {
+            map.flyTo(e.latlng, 15);
+            return;
+        }
+
+        // 以前の選択をリセット
+        if (selectedRectangle) {
+            selectedRectangle.setStyle({ weight: 1, color: "#cccccc" });
+        }
+
+        // 新しい選択を強調
+        rect.setStyle({ weight: 2, color: "#ff0000" });
+        selectedRectangle = rect;
+
+        // Google Maps リンク
+        const tapLat = e.latlng.lat.toFixed(6);
+        const tapLon = e.latlng.lng.toFixed(6);
+        const url = `https://www.google.com/maps?q=${tapLat},${tapLon}`;
+        const post_url = `/posts/create/?lat=${tapLat}&lon=${tapLon}`;
+
+        L.popup()
+            .setLatLng(e.latlng)
+            .setContent(`
+                <div class="map-popup-style">
+                    <b>エリア情報</b><br>
+                    <hr style="margin: 5px 0; border: 0; border-top: 1px solid #eee;">
+                    <a href="${url}" target="_blank">Google Map で開く</a>
+                    <a href="${post_url}">ここに投稿を作成</a>
+                </div>
+            `)
+            .openOn(map);
+    }
+
+    function handleDangerGridClick(e, gx, gy, info) {
+        const tapLat = e.latlng.lat.toFixed(6);
+        const tapLon = e.latlng.lng.toFixed(6);
+        const url = `https://www.google.com/maps?q=${tapLat},${tapLon}`;
+        const post_url = `/posts/create/?lat=${tapLat}&lon=${tapLon}`;
+
+        L.popup()
+            .setLatLng(e.latlng)
+            .setContent(`
+                <div class="map-popup-style" style="color:red;">
+                    <b>⚠️ 危険地点</b><br>
+                    <hr style="margin: 5px 0;">
+                    <p style="font-weight:bold; margin-bottom:5px;">理由：${info}</p>
+                    {% comment %} <p>この場所での投稿は推奨されません。<br>（Danger Grid）</p> {% endcomment %}
+                    <hr style="margin: 5px 0; border: 0; border-top: 1px solid #ecc;">
+                    <a href="${url}" target="_blank" style="color:#d32f2f;">Google Map で開く</a>
+                    <a href="${post_url}" style="color:#d32f2f;">ここに投稿を作成 (注意)</a>
+                </div>
+            `)
+            .openOn(map);
+    }
+
+
+        
+    function updateHeatmapDescription(type) {
+        const desc = document.getElementById("heatmap-description");
+
+        const messages = {
+            present: "直近1ヶ月の『出現（present）』投稿をもとに、動物が実際に目撃された場所を濃淡で表示します。（赤色が濃いほど目撃情報が多い）",
+            absent: "直近1ヶ月の『非出現（absent）』投稿をもとに、動物が目撃されなかった投稿を濃淡で表示します。（青色が濃いほど非出現情報が多い）",
+            total: "直近1ヶ月の『全投稿数（最大5件）』を表示します。色が薄い場所は投稿数5未満で、色が全くない場所は完全な未踏地です。",
+            recommend: "データ不足エリアを算出表示しています。ここを調査することで、データ収集に大きく貢献できます。",
+        };
+
+        desc.textContent = messages[type] || "";
+    }
+    
+    // 初期化
+    initMap();
+    addLocateControl(map); // ★現在地ボタン追加
+    loadData();
+</script>
+
+
+
+{% endblock %}
